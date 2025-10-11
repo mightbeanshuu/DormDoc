@@ -1,11 +1,13 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box } from '@mui/material';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
+import ForgotPassword from './pages/Auth/ForgotPassword';
 import StudentDashboard from './pages/Student/StudentDashboard';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import Profile from './pages/Profile/Profile';
@@ -28,7 +30,18 @@ import InventoryManagement from './pages/Admin/InventoryManagement';
 import AmbulanceTracking from './pages/Admin/AmbulanceTracking';
 import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import PatientChat from './pages/Doctor/PatientChat';
+import LoginInfo from './pages/Admin/LoginInfo';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function App() {
   const { user, loading } = useAuth();
@@ -47,10 +60,12 @@ function App() {
   }
 
   return (
-    <Routes>
+    <QueryClientProvider client={queryClient}>
+      <Routes>
       {/* Public Routes */}
       <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
       <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
+      <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/" />} />
       
       {/* Protected Routes */}
       <Route
@@ -99,6 +114,7 @@ function App() {
                     <Route path="/ambulance-tracking" element={<AmbulanceTracking />} />
                     <Route path="/leave-requests" element={<LeaveRequests />} />
                     <Route path="/qr-scanner" element={<QRScanner />} />
+                    <Route path="/login-info" element={<LoginInfo />} />
                     <Route path="/profile" element={<Profile />} />
                   </>
                 )}
@@ -120,6 +136,7 @@ function App() {
         }
       />
     </Routes>
+    </QueryClientProvider>
   );
 }
 

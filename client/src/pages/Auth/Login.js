@@ -492,22 +492,41 @@ const Login = () => {
                     pt: 3, 
                     borderTop: '1px solid rgba(196, 30, 58, 0.2)',
                   }}>
-                    <Link
-                      href="#"
-                      variant="body2"
-                      sx={{
-                        color: '#666',
-                        textDecoration: 'none',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          textDecoration: 'underline',
-                          color: '#C41E3A',
-                          transform: 'translateY(-1px)',
-                        },
-                      }}
-                    >
-                      Forgot password?
-                    </Link>
+                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                      <Link
+                        to="/forgot-password"
+                        variant="body2"
+                        sx={{
+                          color: '#666',
+                          textDecoration: 'none',
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            textDecoration: 'underline',
+                            color: '#C41E3A',
+                            transform: 'translateY(-1px)',
+                          },
+                        }}
+                      >
+                        Forgot password?
+                      </Link>
+                      <Typography sx={{ color: '#666' }}>|</Typography>
+                      <Link
+                        to="/register"
+                        variant="body2"
+                        sx={{
+                          color: '#666',
+                          textDecoration: 'none',
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            textDecoration: 'underline',
+                            color: '#C41E3A',
+                            transform: 'translateY(-1px)',
+                          },
+                        }}
+                      >
+                        Don't have an account? Sign up
+                      </Link>
+                    </Box>
                   </Box>
                 </Box>
               </Paper>

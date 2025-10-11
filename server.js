@@ -8,6 +8,7 @@ const socketIo = require('socket.io');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
+const adminAuthRoutes = require('./routes/admin');
 const studentRoutes = require('./routes/student');
 const adminRoutes = require('./routes/admin');
 const ambulanceRoutes = require('./routes/ambulance');
@@ -78,6 +79,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminAuthRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ambulance', ambulanceRoutes);

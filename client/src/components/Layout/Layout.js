@@ -34,6 +34,7 @@ import {
   Medication,
   Logout,
   Notifications,
+  Security,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -121,6 +122,7 @@ const Layout = ({ children }) => {
             { text: 'Ambulance Tracking', icon: <DirectionsCar />, path: '/ambulance-tracking' },
             { text: 'Leave Requests', icon: <Assignment />, path: '/leave-requests' },
             { text: 'QR Scanner', icon: <QrCodeScanner />, path: '/qr-scanner' },
+            { text: 'Login Info', icon: <Security />, path: '/login-info' },
             { text: 'Profile', icon: <Person />, path: '/profile' },
           ];
         }

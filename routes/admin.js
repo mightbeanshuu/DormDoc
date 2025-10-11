@@ -1,569 +1,428 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const Doctor = require('../models/Doctor');
-const Ambulance = require('../models/Ambulance');
-const Appointment = require('../models/Appointment');
-const User = require('../models/User');
-
 const router = express.Router();
+const User = require('../models/User');
+const LoginLog = require('../models/LoginLog');
+const OTP = require('../models/OTP');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
-// Apply authentication and admin role check to all routes
-router.use(authenticateToken);
-router.use(requireAdmin);
-
-// @route   GET /api/admin/dashboard
-// @desc    Get admin dashboard data
-// @access  Private (Admin)
-router.get('/dashboard', async (req, res) => {
+// Middleware to verify admin access
+const verifyAdmin = async (req, res, next) => {
   try {
-    // Get all doctors with their current status
-    const doctors = await Doctor.find({ isActive: true })
-      .select('name specialization isOnDuty currentPatientCount currentQueueNumber averageConsultationTime rating');
-
-    // Get ambulance status
-    const ambulances = await Ambulance.find({ isActive: true })
-      .select('vehicleNumber driverName status location currentAssignment performance');
-
-    // Get current student queue
-    const studentQueue = await Appointment.find({
-      status: { $in: ['scheduled', 'confirmed', 'in-progress'] }
-    })
-    .populate('student', 'name studentId department')
-    .populate('doctor', 'name specialization')
-    .sort({ priority: -1, queueNumber: 1 });
-
-    // Get today's statistics
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const todayStats = await Appointment.aggregate([
-      {
-        $match: {
-          appointmentDate: { $gte: today, $lt: tomorrow }
-        }
-      },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // Get emergency alerts
-    const emergencyAlerts = await Appointment.find({
-      isEmergency: true,
-      status: { $in: ['scheduled', 'confirmed', 'in-progress'] }
-    })
-    .populate('student', 'name studentId phone emergencyContact')
-    .sort({ priority: -1, appointmentDate: 1 });
-
-    // Get system metrics
-    const systemMetrics = await getSystemMetrics();
-
-    res.json({
-      doctors,
-      ambulances,
-      studentQueue,
-      todayStats,
-      emergencyAlerts,
-      systemMetrics
-    });
-  } catch (error) {
-    console.error('Admin dashboard error:', error);
-    res.status(500).json({ message: 'Server error loading admin dashboard' });
-  }
-});
-
-// @route   GET /api/admin/doctors
-// @desc    Get all doctors
-// @access  Private (Admin)
-router.get('/doctors', async (req, res) => {
-  try {
-    const doctors = await Doctor.find({ isActive: true })
-      .sort({ name: 1 });
-
-    res.json({ doctors });
-  } catch (error) {
-    console.error('Get doctors error:', error);
-    res.status(500).json({ message: 'Server error fetching doctors' });
-  }
-});
-
-// @route   POST /api/admin/doctors
-// @desc    Add a new doctor
-// @access  Private (Admin)
-router.post('/doctors', [
-  body('name').notEmpty().withMessage('Doctor name is required'),
-  body('specialization').notEmpty().withMessage('Specialization is required'),
-  body('qualification').notEmpty().withMessage('Qualification is required'),
-  body('experience').isNumeric().withMessage('Experience must be a number'),
-  body('licenseNumber').notEmpty().withMessage('License number is required'),
-  body('phone').notEmpty().withMessage('Phone number is required'),
-  body('email').isEmail().withMessage('Valid email is required')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
     }
 
-    const doctor = new Doctor(req.body);
-    await doctor.save();
-
-    res.status(201).json({
-      message: 'Doctor added successfully',
-      doctor
-    });
-  } catch (error) {
-    console.error('Add doctor error:', error);
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Doctor with this email or license number already exists' });
-    }
-    res.status(500).json({ message: 'Server error adding doctor' });
-  }
-});
-
-// @route   PUT /api/admin/doctors/:id
-// @desc    Update doctor information
-// @access  Private (Admin)
-router.put('/doctors/:id', async (req, res) => {
-  try {
-    const doctorId = req.params.id;
-    const updates = req.body;
-
-    const doctor = await Doctor.findByIdAndUpdate(
-      doctorId,
-      updates,
-      { new: true, runValidators: true }
-    );
-
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    res.json({
-      message: 'Doctor updated successfully',
-      doctor
-    });
-  } catch (error) {
-    console.error('Update doctor error:', error);
-    res.status(500).json({ message: 'Server error updating doctor' });
-  }
-});
-
-// @route   PUT /api/admin/doctors/:id/toggle-duty
-// @desc    Toggle doctor duty status
-// @access  Private (Admin)
-router.put('/doctors/:id/toggle-duty', async (req, res) => {
-  try {
-    const doctorId = req.params.id;
-
-    const doctor = await Doctor.findById(doctorId);
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    doctor.isOnDuty = !doctor.isOnDuty;
-    if (doctor.isOnDuty) {
-      doctor.currentQueueNumber = 0;
-    } else {
-      doctor.currentPatientCount = 0;
-    }
-
-    await doctor.save();
-
-    // Emit real-time update
-    req.io.emit('doctor-duty-changed', {
-      doctorId: doctor._id,
-      isOnDuty: doctor.isOnDuty,
-      doctorName: doctor.name
-    });
-
-    res.json({
-      message: `Doctor ${doctor.isOnDuty ? 'started' : 'ended'} duty`,
-      doctor
-    });
-  } catch (error) {
-    console.error('Toggle doctor duty error:', error);
-    res.status(500).json({ message: 'Server error toggling doctor duty' });
-  }
-});
-
-// @route   GET /api/admin/ambulances
-// @desc    Get all ambulances
-// @access  Private (Admin)
-router.get('/ambulances', async (req, res) => {
-  try {
-    const ambulances = await Ambulance.find({ isActive: true })
-      .sort({ vehicleNumber: 1 });
-
-    res.json({ ambulances });
-  } catch (error) {
-    console.error('Get ambulances error:', error);
-    res.status(500).json({ message: 'Server error fetching ambulances' });
-  }
-});
-
-// @route   POST /api/admin/ambulances
-// @desc    Add a new ambulance
-// @access  Private (Admin)
-router.post('/ambulances', [
-  body('vehicleNumber').notEmpty().withMessage('Vehicle number is required'),
-  body('driverName').notEmpty().withMessage('Driver name is required'),
-  body('driverPhone').notEmpty().withMessage('Driver phone is required'),
-  body('driverLicense').notEmpty().withMessage('Driver license is required'),
-  body('capacity').isNumeric().withMessage('Capacity must be a number'),
-  body('location.latitude').isNumeric().withMessage('Latitude is required'),
-  body('location.longitude').isNumeric().withMessage('Longitude is required'),
-  body('location.address').notEmpty().withMessage('Address is required')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const ambulance = new Ambulance(req.body);
-    await ambulance.save();
-
-    res.status(201).json({
-      message: 'Ambulance added successfully',
-      ambulance
-    });
-  } catch (error) {
-    console.error('Add ambulance error:', error);
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Ambulance with this vehicle number or driver license already exists' });
-    }
-    res.status(500).json({ message: 'Server error adding ambulance' });
-  }
-});
-
-// @route   PUT /api/admin/ambulances/:id/status
-// @desc    Update ambulance status
-// @access  Private (Admin)
-router.put('/ambulances/:id/status', [
-  body('status').isIn(['available', 'in-use', 'maintenance', 'out-of-service']).withMessage('Invalid status')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const ambulanceId = req.params.id;
-    const { status } = req.body;
-
-    const ambulance = await Ambulance.findById(ambulanceId);
-    if (!ambulance) {
-      return res.status(404).json({ message: 'Ambulance not found' });
-    }
-
-    ambulance.status = status;
-    await ambulance.save();
-
-    // Emit real-time update
-    req.io.emit('ambulance-status-changed', {
-      ambulanceId: ambulance._id,
-      status: ambulance.status,
-      vehicleNumber: ambulance.vehicleNumber
-    });
-
-    res.json({
-      message: 'Ambulance status updated successfully',
-      ambulance
-    });
-  } catch (error) {
-    console.error('Update ambulance status error:', error);
-    res.status(500).json({ message: 'Server error updating ambulance status' });
-  }
-});
-
-// @route   GET /api/admin/queue
-// @desc    Get current student queue
-// @access  Private (Admin)
-router.get('/queue', async (req, res) => {
-  try {
-    const { doctorId, status } = req.query;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
     
-    const query = {};
-    if (doctorId) query.doctor = doctorId;
-    if (status) query.status = status;
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
 
-    const queue = await Appointment.find(query)
-      .populate('student', 'name studentId department phone')
-      .populate('doctor', 'name specialization')
-      .sort({ priority: -1, queueNumber: 1 });
-
-    res.json({ queue });
+    req.user = user;
+    next();
   } catch (error) {
-    console.error('Get queue error:', error);
-    res.status(500).json({ message: 'Server error fetching queue' });
+    res.status(401).json({ message: 'Invalid token' });
   }
-});
+};
 
-// @route   PUT /api/admin/queue/:id/status
-// @desc    Update appointment status
-// @access  Private (Admin)
-router.put('/queue/:id/status', [
-  body('status').isIn(['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show']).withMessage('Invalid status')
-], async (req, res) => {
+// Apply admin middleware to all routes
+router.use(verifyAdmin);
+
+// Get all login information
+router.get('/login-info', async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const { page = 1, limit = 50, search, role, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build filter object
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { 'user.name': { $regex: search, $options: 'i' } },
+        { 'user.email': { $regex: search, $options: 'i' } },
+        { 'user.studentId': { $regex: search, $options: 'i' } },
+        { ipAddress: { $regex: search, $options: 'i' } },
+      ];
+    }
+    if (role && role !== 'all') {
+      filter['user.role'] = role;
+    }
+    if (status && status !== 'all') {
+      filter.status = status;
     }
 
-    const appointmentId = req.params.id;
-    const { status, consultationNotes, prescription, diagnosis, treatment } = req.body;
-
-    const appointment = await Appointment.findById(appointmentId);
-    if (!appointment) {
-      return res.status(404).json({ message: 'Appointment not found' });
-    }
-
-    appointment.status = status;
-    if (consultationNotes) appointment.consultationNotes = consultationNotes;
-    if (prescription) appointment.prescription = prescription;
-    if (diagnosis) appointment.diagnosis = diagnosis;
-    if (treatment) appointment.treatment = treatment;
-
-    await appointment.updateStatus(status);
-
-    // Emit real-time update
-    req.io.emit('appointment-status-changed', {
-      appointmentId: appointment._id,
-      status: appointment.status,
-      studentId: appointment.student
-    });
-
-    res.json({
-      message: 'Appointment status updated successfully',
-      appointment
-    });
-  } catch (error) {
-    console.error('Update appointment status error:', error);
-    res.status(500).json({ message: 'Server error updating appointment status' });
-  }
-});
-
-// @route   GET /api/admin/analytics
-// @desc    Get system analytics
-// @access  Private (Admin)
-router.get('/analytics', async (req, res) => {
-  try {
-    const { period = '7d' } = req.query;
-    const endDate = new Date();
-    const startDate = new Date();
-    
-    switch (period) {
-      case '1d':
-        startDate.setDate(startDate.getDate() - 1);
-        break;
-      case '7d':
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      default:
-        startDate.setDate(startDate.getDate() - 7);
-    }
-
-    // Get appointment statistics
-    const appointmentStats = await Appointment.aggregate([
-      {
-        $match: {
-          appointmentDate: { $gte: startDate, $lte: endDate }
-        }
-      },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-          avgWaitTime: { $avg: '$actualWaitTime' }
-        }
-      }
-    ]);
-
-    // Get doctor performance
-    const doctorPerformance = await Appointment.aggregate([
-      {
-        $match: {
-          appointmentDate: { $gte: startDate, $lte: endDate },
-          status: 'completed'
-        }
-      },
-      {
-        $group: {
-          _id: '$doctor',
-          totalAppointments: { $sum: 1 },
-          avgConsultationTime: { $avg: '$consultationDuration' },
-          avgRating: { $avg: '$feedback.rating' }
-        }
-      },
+    // Get login information with user details
+    const loginInfo = await LoginLog.aggregate([
       {
         $lookup: {
-          from: 'doctors',
-          localField: '_id',
+          from: 'users',
+          localField: 'userId',
           foreignField: '_id',
-          as: 'doctor'
+          as: 'user'
         }
       },
       {
-        $unwind: '$doctor'
+        $unwind: {
+          path: '$user',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $match: filter
+      },
+      {
+        $sort: { timestamp: -1 }
+      },
+      {
+        $skip: skip
+      },
+      {
+        $limit: parseInt(limit)
       },
       {
         $project: {
-          doctorName: '$doctor.name',
-          specialization: '$doctor.specialization',
-          totalAppointments: 1,
-          avgConsultationTime: 1,
-          avgRating: 1
+          _id: 1,
+          userId: 1,
+          email: 1,
+          action: 1,
+          ipAddress: 1,
+          userAgent: 1,
+          status: 1,
+          reason: 1,
+          timestamp: 1,
+          'user._id': 1,
+          'user.name': 1,
+          'user.email': 1,
+          'user.role': 1,
+          'user.studentId': 1,
+          'user.department': 1,
+          'user.year': 1,
+          'user.phone': 1,
+          'user.bloodGroup': 1,
+          'user.emergencyContact': 1,
+          'user.lastLogin': 1,
+          'user.loginCount': 1,
+          'user.isActive': 1,
         }
       }
     ]);
 
-    // Get ambulance performance
-    const ambulancePerformance = await Ambulance.aggregate([
+    // Get total count for pagination
+    const totalCount = await LoginLog.aggregate([
       {
-        $project: {
-          vehicleNumber: 1,
-          driverName: 1,
-          totalTrips: '$performance.totalTrips',
-          avgResponseTime: '$performance.averageResponseTime',
-          rating: '$performance.rating'
-        }
-      }
-    ]);
-
-    // Get emergency statistics
-    const emergencyStats = await Appointment.aggregate([
-      {
-        $match: {
-          appointmentDate: { $gte: startDate, $lte: endDate },
-          isEmergency: true
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user'
         }
       },
       {
-        $group: {
-          _id: null,
-          totalEmergencies: { $sum: 1 },
-          avgResponseTime: { $avg: '$actualWaitTime' }
+        $unwind: {
+          path: '$user',
+          preserveNullAndEmptyArrays: true
         }
+      },
+      {
+        $match: filter
+      },
+      {
+        $count: 'total'
       }
     ]);
 
     res.json({
-      period,
-      appointmentStats,
-      doctorPerformance,
-      ambulancePerformance,
-      emergencyStats: emergencyStats[0] || { totalEmergencies: 0, avgResponseTime: 0 }
+      loginInfo,
+      totalCount: totalCount[0]?.total || 0,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil((totalCount[0]?.total || 0) / limit),
     });
   } catch (error) {
-    console.error('Get analytics error:', error);
-    res.status(500).json({ message: 'Server error fetching analytics' });
+    console.error('Get login info error:', error);
+    res.status(500).json({ message: 'Failed to fetch login information' });
   }
 });
 
-// @route   GET /api/admin/leave-requests
-// @desc    Get pending leave requests
-// @access  Private (Admin)
-router.get('/leave-requests', async (req, res) => {
+// Get login statistics
+router.get('/login-statistics', async (req, res) => {
   try {
-    const leaveRequests = await Appointment.find({
-      'leaveRequest.requested': true,
-      'leaveRequest.status': 'pending'
+    const statistics = await LoginLog.getLoginStatistics();
+    res.json(statistics);
+  } catch (error) {
+    console.error('Get login statistics error:', error);
+    res.status(500).json({ message: 'Failed to fetch login statistics' });
+  }
+});
+
+// Get recent logins
+router.get('/recent-logins', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    const recentLogins = await LoginLog.find({
+      action: 'login',
+      status: 'success'
     })
-    .populate('student', 'name studentId department year')
-    .populate('doctor', 'name specialization')
-    .sort({ appointmentDate: -1 });
+    .sort({ timestamp: -1 })
+    .limit(parseInt(limit))
+    .populate('userId', 'name email role studentId')
+    .select('userId email ipAddress userAgent timestamp');
 
-    res.json({ leaveRequests });
+    res.json(recentLogins);
   } catch (error) {
-    console.error('Get leave requests error:', error);
-    res.status(500).json({ message: 'Server error fetching leave requests' });
+    console.error('Get recent logins error:', error);
+    res.status(500).json({ message: 'Failed to fetch recent logins' });
   }
 });
 
-// @route   PUT /api/admin/leave-requests/:id/approve
-// @desc    Approve or reject leave request
-// @access  Private (Admin)
-router.put('/leave-requests/:id/approve', [
-  body('status').isIn(['approved', 'rejected']).withMessage('Status must be approved or rejected'),
-  body('comments').optional().isString().withMessage('Comments must be a string')
-], async (req, res) => {
+// Get suspicious login attempts
+router.get('/suspicious-logins', async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const suspiciousLogins = await LoginLog.getSuspiciousLogins();
+    res.json(suspiciousLogins);
+  } catch (error) {
+    console.error('Get suspicious logins error:', error);
+    res.status(500).json({ message: 'Failed to fetch suspicious logins' });
+  }
+});
+
+// Get user login history
+router.get('/user-login-history/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50 } = req.query;
+    
+    const loginHistory = await LoginLog.getUserLoginHistory(userId, parseInt(limit));
+    res.json(loginHistory);
+  } catch (error) {
+    console.error('Get user login history error:', error);
+    res.status(500).json({ message: 'Failed to fetch user login history' });
+  }
+});
+
+// Reset user password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+
+    if (!userId || !newPassword) {
+      return res.status(400).json({ message: 'User ID and new password are required' });
     }
 
-    const appointmentId = req.params.id;
-    const { status, comments } = req.body;
-
-    const appointment = await Appointment.findById(appointmentId);
-    if (!appointment) {
-      return res.status(404).json({ message: 'Appointment not found' });
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    if (!appointment.leaveRequest.requested) {
-      return res.status(400).json({ message: 'No leave request found for this appointment' });
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    appointment.leaveRequest.status = status;
-    appointment.leaveRequest.approvedBy = req.user.name;
-    appointment.leaveRequest.approvedAt = new Date();
-    if (comments) {
-      appointment.leaveRequest.comments = comments;
-    }
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    user.password = hashedPassword;
+    await user.save();
 
-    await appointment.save();
-
-    // Emit real-time update
-    req.io.emit('leave-request-updated', {
-      appointmentId: appointment._id,
-      status: appointment.leaveRequest.status,
-      studentId: appointment.student
+    // Log password reset by admin
+    const loginLog = new LoginLog({
+      userId: user._id,
+      email: user.email,
+      action: 'password_reset',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      status: 'success',
+      reason: 'Reset by admin',
     });
+    await loginLog.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Failed to reset password' });
+  }
+});
+
+// Toggle user status (lock/unlock)
+router.post('/toggle-user-status', async (req, res) => {
+  try {
+    const { userId, action } = req.body;
+
+    if (!userId || !action) {
+      return res.status(400).json({ message: 'User ID and action are required' });
+    }
+
+    if (!['lock', 'unlock'].includes(action)) {
+      return res.status(400).json({ message: 'Action must be either lock or unlock' });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update user status
+    user.isActive = action === 'unlock';
+    await user.save();
+
+    // Log status change
+    const loginLog = new LoginLog({
+      userId: user._id,
+      email: user.email,
+      action: action === 'lock' ? 'account_lock' : 'account_unlock',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      status: 'success',
+      reason: `Account ${action}ed by admin`,
+    });
+    await loginLog.save();
+
+    res.json({ 
+      message: `User ${action}ed successfully`,
+      isActive: user.isActive
+    });
+  } catch (error) {
+    console.error('Toggle user status error:', error);
+    res.status(500).json({ message: 'Failed to toggle user status' });
+  }
+});
+
+// Get OTP statistics
+router.get('/otp-statistics', async (req, res) => {
+  try {
+    const statistics = await OTP.getOTPStatistics();
+    res.json(statistics);
+  } catch (error) {
+    console.error('Get OTP statistics error:', error);
+    res.status(500).json({ message: 'Failed to fetch OTP statistics' });
+  }
+});
+
+// Get all users with login information
+router.get('/users', async (req, res) => {
+  try {
+    const { page = 1, limit = 50, search, role, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build filter object
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { studentId: { $regex: search, $options: 'i' } },
+      ];
+    }
+    if (role && role !== 'all') {
+      filter.role = role;
+    }
+    if (status && status !== 'all') {
+      filter.isActive = status === 'active';
+    }
+
+    const users = await User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const totalCount = await User.countDocuments(filter);
 
     res.json({
-      message: `Leave request ${status} successfully`,
-      appointment
+      users,
+      totalCount,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalCount / limit),
     });
   } catch (error) {
-    console.error('Update leave request error:', error);
-    res.status(500).json({ message: 'Server error updating leave request' });
+    console.error('Get users error:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
   }
 });
 
-// Helper function to get system metrics
-async function getSystemMetrics() {
-  const totalStudents = await User.countDocuments({ role: 'student', isActive: true });
-  const totalDoctors = await Doctor.countDocuments({ isActive: true });
-  const totalAmbulances = await Ambulance.countDocuments({ isActive: true });
-  const activeAppointments = await Appointment.countDocuments({
-    status: { $in: ['scheduled', 'confirmed', 'in-progress'] }
-  });
-  const todayAppointments = await Appointment.countDocuments({
-    appointmentDate: {
-      $gte: new Date().setHours(0, 0, 0, 0),
-      $lt: new Date().setHours(23, 59, 59, 999)
-    }
-  });
+// Delete user
+router.delete('/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
 
-  return {
-    totalStudents,
-    totalDoctors,
-    totalAmbulances,
-    activeAppointments,
-    todayAppointments
-  };
-}
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Don't allow deleting admin users
+    if (user.role === 'admin') {
+      return res.status(403).json({ message: 'Cannot delete admin users' });
+    }
+
+    // Delete user
+    await User.findByIdAndDelete(userId);
+
+    // Log user deletion
+    const loginLog = new LoginLog({
+      email: user.email,
+      action: 'user_deletion',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      status: 'success',
+      reason: 'User deleted by admin',
+    });
+    await loginLog.save();
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+});
+
+// Export login data
+router.get('/export-login-data', async (req, res) => {
+  try {
+    const { format = 'csv', startDate, endDate } = req.query;
+    
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) {
+      dateFilter.timestamp = { $gte: new Date(startDate) };
+    }
+    if (endDate) {
+      dateFilter.timestamp = { ...dateFilter.timestamp, $lte: new Date(endDate) };
+    }
+
+    const loginData = await LoginLog.find(dateFilter)
+      .populate('userId', 'name email role studentId')
+      .sort({ timestamp: -1 });
+
+    if (format === 'csv') {
+      const csvData = [
+        ['Timestamp', 'User', 'Email', 'Role', 'Action', 'IP Address', 'Status', 'Reason'],
+        ...loginData.map(log => [
+          log.timestamp.toISOString(),
+          log.userId?.name || 'N/A',
+          log.email,
+          log.userId?.role || 'N/A',
+          log.action,
+          log.ipAddress,
+          log.status,
+          log.reason || 'N/A',
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=login-data.csv');
+      res.send(csvData);
+    } else {
+      res.json(loginData);
+    }
+  } catch (error) {
+    console.error('Export login data error:', error);
+    res.status(500).json({ message: 'Failed to export login data' });
+  }
+});
 
 module.exports = router;
