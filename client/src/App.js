@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastContainer } from 'react-toastify';
+import { Box, CircularProgress, Typography } from '@mui/material';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { ClerkAuthProvider } from './contexts/ClerkAuthContext';
@@ -53,6 +54,36 @@ console.log('REACT_APP_CLERK_PUBLISHABLE_KEY:', clerkPubKey);
 console.log('All env vars:', process.env);
 
 function App() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate app initialization
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        minHeight="100vh"
+        gap={2}
+      >
+        <CircularProgress size={60} />
+        <Typography variant="h6">Loading College Dispensary System...</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Please wait while we initialize the application
+        </Typography>
+      </Box>
+    );
+  }
+
   if (!clerkPubKey) {
     return (
       <div style={{ 
