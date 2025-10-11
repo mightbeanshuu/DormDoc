@@ -120,7 +120,10 @@ function App() {
     );
   }
 
-  // Test page removed - full app restored
+  // Temporary diagnostic - show test page if Clerk key is missing
+  if (!process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || process.env.REACT_APP_CLERK_PUBLISHABLE_KEY === 'undefined') {
+    return <TestPage />;
+  }
 
   return (
     <ClerkProvider publishableKey={clerkPubKey}>
