@@ -10,6 +10,7 @@ import { ClerkAuthProvider } from './contexts/ClerkAuthContext';
 import Layout from './components/Layout/Layout';
 import ClerkLogin from './pages/Auth/ClerkLogin';
 import ClerkRegister from './pages/Auth/ClerkRegister';
+import TestPage from './TestPage';
 import StudentDashboard from './pages/Student/StudentDashboard';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import Profile from './pages/Profile/Profile';
@@ -52,6 +53,8 @@ const clerkPubKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || 'pk_test_Zmx1
 console.log('Environment check:');
 console.log('REACT_APP_CLERK_PUBLISHABLE_KEY:', clerkPubKey);
 console.log('All env vars:', process.env);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PUBLIC_URL:', process.env.PUBLIC_URL);
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -115,6 +118,11 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  // Temporary: Show test page first
+  if (process.env.NODE_ENV === 'production') {
+    return <TestPage />;
   }
 
   return (
