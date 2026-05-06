@@ -6,36 +6,8 @@ import { useClerkAuth } from '../contexts/ClerkAuthContext';
 import StudentDashboard from '../pages/Student/StudentDashboard';
 import DoctorDashboard from '../pages/Doctor/DoctorDashboard';
 import AdminDashboard from '../pages/Admin/AdminDashboard';
-
-// Temporary HOD Dashboard
-const HodDashboard = () => (
-  <Box sx={{ p: 3 }}>
-    <Typography variant="h4" gutterBottom color="#1A365D" fontWeight="bold">
-      Head of Department Dashboard
-    </Typography>
-    <Paper sx={{ p: 4, textAlign: 'center', mt: 4, borderRadius: 3 }}>
-      <AccountBalance sx={{ fontSize: 60, color: '#f59e0b', mb: 2 }} />
-      <Typography variant="h5" color="text.secondary">
-        Welcome, HOD. Departmental medical oversight features are coming soon.
-      </Typography>
-    </Paper>
-  </Box>
-);
-
-// Temporary Parent Dashboard
-const ParentDashboard = () => (
-  <Box sx={{ p: 3 }}>
-    <Typography variant="h4" gutterBottom color="#1A365D" fontWeight="bold">
-      Parent Portal
-    </Typography>
-    <Paper sx={{ p: 4, textAlign: 'center', mt: 4, borderRadius: 3 }}>
-      <FamilyRestroom sx={{ fontSize: 60, color: '#ec4899', mb: 2 }} />
-      <Typography variant="h5" color="text.secondary">
-        Welcome. Ward medical tracking and alerts are coming soon.
-      </Typography>
-    </Paper>
-  </Box>
-);
+import HodDashboard from '../pages/HOD/HodDashboard';
+import ParentDashboard from '../pages/Parent/ParentDashboard';
 
 const DashboardRouter = () => {
   const { user } = useClerkAuth();
