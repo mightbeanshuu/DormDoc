@@ -21,7 +21,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const LocationGate = ({ children }) => {
-  const [locationStatus, setLocationStatus] = useState('checking'); // 'checking', 'allowed', 'blocked', 'error', 'prompt'
+  const [locationStatus, setLocationStatus] = useState('initial'); // 'initial', 'checking', 'allowed', 'blocked', 'error', 'prompt'
   const [distance, setDistance] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -62,7 +62,7 @@ const LocationGate = ({ children }) => {
   };
 
   useEffect(() => {
-    checkLocation();
+    // We wait for the user to explicitly click the button to avoid auto-denial
   }, []);
 
   if (locationStatus === 'allowed') {
@@ -94,6 +94,26 @@ const LocationGate = ({ children }) => {
           <img src="/assets/bit_logo.png" alt="BIT Mesra" style={{ width: 80, height: 80 }} />
         </Box>
 
+        {locationStatus === 'initial' && (
+          <>
+            <LocationOn sx={{ fontSize: 60, color: '#1A365D', mb: 2 }} />
+            <Typography variant="h5" gutterBottom color="#1A365D" fontWeight="bold">
+              Campus Verification Required
+            </Typography>
+            <Typography color="text.secondary" paragraph>
+              To access the DormDoc portal, we need to verify that you are currently within the BIT Mesra campus boundaries.
+            </Typography>
+            <Button 
+              variant="contained" 
+              onClick={checkLocation} 
+              sx={{ mt: 2, bgcolor: '#C41E3A', '&:hover': { bgcolor: '#8B0000' } }}
+              size="large"
+            >
+              Verify My Location
+            </Button>
+          </>
+        )}
+
         {locationStatus === 'checking' && (
           <>
             <CircularProgress sx={{ mb: 3, color: '#C41E3A' }} />
@@ -101,7 +121,7 @@ const LocationGate = ({ children }) => {
               Verifying Location...
             </Typography>
             <Typography color="text.secondary">
-              Please wait while we confirm you are near the BIT Mesra campus.
+              Please wait while we confirm you are near the BIT Mesra campus. Make sure to click "Allow" if your browser prompts you.
             </Typography>
           </>
         )}
@@ -128,13 +148,17 @@ const LocationGate = ({ children }) => {
           <>
             <ErrorOutline sx={{ fontSize: 60, color: '#f59e0b', mb: 2 }} />
             <Typography variant="h5" gutterBottom color="#1A365D" fontWeight="bold">
-              Location Required
+              Location Blocked
             </Typography>
-            <Typography color="error" paragraph>
+            <Typography color="error" paragraph fontWeight="bold">
               {errorMsg}
             </Typography>
-            <Typography color="text.secondary" paragraph>
-              Please allow location permissions in your browser settings to access the portal.
+            <Typography color="text.secondary" paragraph sx={{ fontSize: '0.9rem', textAlign: 'left', bgcolor: '#f8fafc', p: 2, borderRadius: 1 }}>
+              <strong>How to fix this:</strong><br/>
+              1. Look at your browser's address bar.<br/>
+              2. Click the settings/lock icon or the crossed-out location icon.<br/>
+              3. Change Location permission to "Allow".<br/>
+              4. Refresh this page and try again.
             </Typography>
             <Button 
               variant="contained" 
@@ -142,7 +166,7 @@ const LocationGate = ({ children }) => {
               sx={{ mt: 2, bgcolor: '#1A365D' }}
               startIcon={<LocationOn />}
             >
-              Grant Permission & Retry
+              I have enabled it, Retry
             </Button>
           </>
         )}
