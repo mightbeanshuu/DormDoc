@@ -35,6 +35,8 @@ import {
   Logout,
   Notifications,
   Security,
+  ArrowBack,
+  ArrowForward,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useClerkAuth } from '../../contexts/ClerkAuthContext';
@@ -276,11 +278,28 @@ const Layout = ({ children }) => {
                 aria-label="open drawer"
                 edge="start"
                 onClick={handleDrawerToggle}
-                sx={{ mr: 2, display: { sm: 'none' } }}
+                sx={{ mr: 2, display: { sm: 'none' }, color: '#1e3a8a' }}
               >
                 <MenuIcon />
               </IconButton>
-              <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, color: '#1e3a8a' }}>
+
+              {/* Navigation Buttons */}
+              <IconButton
+                onClick={() => navigate(-1)}
+                sx={{ mr: 1, color: '#1e3a8a' }}
+                aria-label="go back"
+              >
+                <ArrowBack />
+              </IconButton>
+              <IconButton
+                onClick={() => navigate(1)}
+                sx={{ mr: 3, color: '#1e3a8a' }}
+                aria-label="go forward"
+              >
+                <ArrowForward />
+              </IconButton>
+
+              <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, color: '#1e3a8a', fontWeight: 'bold' }}>
                 {user?.role === 'student' ? 'Student Portal' : 'Admin Portal'}
               </Typography>
               <IconButton color="inherit" sx={{ mr: 2, color: '#1e3a8a' }}>
