@@ -118,21 +118,6 @@ const LocationGate = ({ children }) => {
         position: 'relative'
       }}
     >
-      {/* Hidden Admin Bypass Button (Bottom Right Corner) */}
-      <Tooltip title="Admin Bypass">
-        <IconButton 
-          onClick={handleAdminBypass}
-          sx={{ 
-            position: 'absolute', 
-            bottom: 16, 
-            right: 16, 
-            color: 'rgba(255,255,255,0.1)', // Nearly invisible until hovered
-            '&:hover': { color: 'rgba(255,255,255,0.5)' } 
-          }}
-        >
-          <AdminPanelSettings />
-        </IconButton>
-      </Tooltip>
 
       <Paper
         elevation={24}
@@ -166,6 +151,15 @@ const LocationGate = ({ children }) => {
               >
                 Verify My Location
               </Button>
+              <Button 
+                variant="outlined" 
+                onClick={handleAdminBypass} 
+                sx={{ color: '#1A365D', borderColor: '#1A365D', '&:hover': { borderColor: '#0F172A', bgcolor: 'rgba(26, 54, 93, 0.05)' } }}
+                size="large"
+                startIcon={<AdminPanelSettings />}
+              >
+                Bypass Verification (Admin/Dev)
+              </Button>
             </Box>
           </>
         )}
@@ -194,9 +188,18 @@ const LocationGate = ({ children }) => {
             <Typography color="text.secondary" paragraph>
               The DormDoc portal is geofenced and can only be accessed by students who are within a {MAX_ALLOWED_DISTANCE_KM} km radius of the college campus.
             </Typography>
-            <Button variant="contained" onClick={checkLocation} sx={{ mt: 2, bgcolor: '#1A365D' }}>
-              Re-check Location
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 2 }}>
+              <Button variant="contained" onClick={checkLocation} sx={{ bgcolor: '#1A365D' }}>
+                Re-check Location
+              </Button>
+              <Button 
+                variant="outlined" 
+                onClick={handleAdminBypass} 
+                sx={{ color: '#1A365D', borderColor: '#1A365D' }}
+              >
+                Bypass
+              </Button>
+            </Box>
           </>
         )}
 
@@ -216,14 +219,24 @@ const LocationGate = ({ children }) => {
               3. Change Location permission to "Allow".<br/>
               4. Refresh this page and try again.
             </Typography>
-            <Button 
-              variant="contained" 
-              onClick={checkLocation} 
-              sx={{ mt: 2, bgcolor: '#1A365D' }}
-              startIcon={<LocationOn />}
-            >
-              I have enabled it, Retry
-            </Button>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+              <Button 
+                variant="contained" 
+                onClick={checkLocation} 
+                sx={{ bgcolor: '#1A365D' }}
+                startIcon={<LocationOn />}
+              >
+                I have enabled it, Retry
+              </Button>
+              <Button 
+                variant="outlined" 
+                onClick={handleAdminBypass} 
+                sx={{ color: '#1A365D', borderColor: '#1A365D' }}
+                startIcon={<AdminPanelSettings />}
+              >
+                Bypass (Admin/Dev)
+              </Button>
+            </Box>
           </>
         )}
       </Paper>
