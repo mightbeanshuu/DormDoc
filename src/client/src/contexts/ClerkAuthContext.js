@@ -104,7 +104,7 @@ export const ClerkAuthProvider = ({ children }) => {
       _id: user.id,
       name: user.fullName,
       email: user.primaryEmailAddress?.emailAddress,
-      role: user.publicMetadata?.role || 'student',
+      role: localStorage.getItem('pendingRole') || user.publicMetadata?.role || 'student',
       studentId: user.publicMetadata?.studentId,
       department: user.publicMetadata?.department,
       year: user.publicMetadata?.year,

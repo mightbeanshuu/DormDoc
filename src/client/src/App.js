@@ -8,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import { ClerkAuthProvider } from './contexts/ClerkAuthContext';
 import Layout from './components/Layout/Layout';
+import DashboardRouter from './components/DashboardRouter';
 import LocationGate from './components/LocationGate';
 import ClerkLogin from './pages/Auth/ClerkLogin';
 import ClerkRegister from './pages/Auth/ClerkRegister';
@@ -132,6 +133,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ClerkAuthProvider>
           <Router>
+            <LocationGate>
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<ClerkLogin />} />
@@ -143,11 +145,12 @@ function App() {
                 element={
                   <>
                     <SignedIn>
-                      <LocationGate>
-                        <Layout>
-                          <Routes>
+                      <Layout>
+                        <Routes>
+                          {/* Dynamic Root Dashboard Route */}
+                          <Route index element={<DashboardRouter />} />
+                          
                           {/* Student Routes */}
-                          <Route index element={<StudentDashboard />} />
                           <Route path="appointments" element={<Appointments />} />
                           <Route path="book-appointment" element={<BookAppointment />} />
                           <Route path="emergency-sos" element={<EmergencySOS />} />
@@ -176,8 +179,7 @@ function App() {
                           <Route path="profile" element={<Profile />} />
                         </Routes>
                       </Layout>
-                    </LocationGate>
-                  </SignedIn>
+                    </SignedIn>
                     <SignedOut>
                       <RedirectToSignIn />
                     </SignedOut>
@@ -185,6 +187,7 @@ function App() {
                 }
               />
             </Routes>
+            </LocationGate>
             <ChatbotComponent />
             <ToastContainer />
           </Router>

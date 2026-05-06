@@ -1,8 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SignIn } from '@clerk/clerk-react';
-import { Box, Container, Typography, Paper } from '@mui/material';
+import { Box, Container, Typography, Paper, Grid, Card, CardContent, IconButton } from '@mui/material';
+import { School, AdminPanelSettings, LocalHospital, AccountBalance, FamilyRestroom, ArrowBack } from '@mui/icons-material';
+
+const roles = [
+  { id: 'student', title: 'Student', icon: <School fontSize="large" />, color: '#3b82f6', desc: 'Access medical records & book appointments' },
+  { id: 'doctor', title: 'Medical Faculty', icon: <LocalHospital fontSize="large" />, color: '#10b981', desc: 'Manage patients & prescriptions' },
+  { id: 'admin', title: 'Administrator', icon: <AdminPanelSettings fontSize="large" />, color: '#8b5cf6', desc: 'Manage dispensary operations' },
+  { id: 'hod', title: 'HOD', icon: <AccountBalance fontSize="large" />, color: '#f59e0b', desc: 'Departmental medical oversight' },
+  { id: 'parent', title: 'Parent', icon: <FamilyRestroom fontSize="large" />, color: '#ec4899', desc: 'View ward medical status' },
+];
 
 const ClerkLogin = () => {
+  const [selectedRole, setSelectedRole] = useState(null);
+
+  const handleRoleSelect = (roleId) => {
+    localStorage.setItem('pendingRole', roleId);
+    setSelectedRole(roleId);
+  };
+
   return (
     <Box
       sx={{
@@ -151,12 +167,12 @@ const ClerkLogin = () => {
             </Box>
           </Paper>
 
-          {/* Right Panel - Clerk Sign In */}
+          {/* Right Panel - Dynamic Login Area */}
           <Paper
             elevation={24}
             sx={{
               flex: 1,
-              maxWidth: '500px',
+              maxWidth: '600px',
               background: '#ffffff',
               p: { xs: 4, md: 6 },
               borderRadius: { xs: '24px', md: '0 24px 24px 0' },
@@ -166,89 +182,86 @@ const ClerkLogin = () => {
               justifyContent: 'center',
             }}
           >
-            <Box sx={{ textAlign: 'center', mb: 5 }}>
-              {/* Show logo on mobile where left panel is hidden */}
-              <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', mb: 3 }}>
-                <img src="/assets/bit_logo.png" alt="BIT Mesra Logo" style={{ width: 80, height: 80 }} />
+            {!selectedRole ? (
+              <Box>
+                <Box sx={{ textAlign: 'center', mb: 4 }}>
+                  <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', mb: 3 }}>
+                    <img src="/assets/bit_logo.png" alt="BIT Mesra Logo" style={{ width: 80, height: 80 }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: '800', mb: 1, color: '#1A365D' }}>
+                    Select Your Role
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#64748B' }}>
+                    Please choose how you want to log into the system
+                  </Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  {roles.map((role) => (
+                    <Grid item xs={12} sm={role.id === 'parent' ? 12 : 6} key={role.id}>
+                      <Card 
+                        onClick={() => handleRoleSelect(role.id)}
+                        sx={{ 
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease-in-out',
+                          border: '2px solid transparent',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: 6,
+                            borderColor: role.color,
+                          }
+                        }}
+                      >
+                        <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', p: 3 }}>
+                          <Box sx={{ color: role.color, mb: 1 }}>
+                            {role.icon}
+                          </Box>
+                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1E293B', mb: 0.5 }}>
+                            {role.title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {role.desc}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
               </Box>
-              
-              <Typography
-                variant="h4"
-                sx={{
-                  fontWeight: '800',
-                  mb: 1,
-                  color: '#1A365D',
-                }}
-              >
-                Welcome Back
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{
-                  color: '#64748B',
-                }}
-              >
-                Sign in to access your student medical portal
-              </Typography>
-            </Box>
+            ) : (
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+                  <IconButton onClick={() => setSelectedRole(null)} sx={{ mr: 2, color: '#1A365D' }}>
+                    <ArrowBack />
+                  </IconButton>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: '800', color: '#1A365D' }}>
+                      {roles.find(r => r.id === selectedRole)?.title} Login
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#64748B' }}>
+                      Sign in to your account to continue
+                    </Typography>
+                  </Box>
+                </Box>
 
-            {/* Clerk Sign In Component */}
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-              <SignIn
-                appearance={{
-                  elements: {
-                    rootBox: {
-                      width: '100%',
-                    },
-                    card: {
-                      width: '100%',
-                      boxShadow: 'none',
-                      border: 'none',
-                      padding: 0,
-                    },
-                    header: {
-                      display: 'none', // We use our own header above
-                    },
-                    formButtonPrimary: {
-                      backgroundColor: '#C41E3A',
-                      padding: '12px',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      textTransform: 'none',
-                      '&:hover': {
-                        backgroundColor: '#8B0000',
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <SignIn
+                    appearance={{
+                      elements: {
+                        rootBox: { width: '100%' },
+                        card: { width: '100%', boxShadow: 'none', border: 'none', padding: 0 },
+                        header: { display: 'none' },
+                        formButtonPrimary: { backgroundColor: '#C41E3A', padding: '12px', fontSize: '16px', fontWeight: 'bold', textTransform: 'none', '&:hover': { backgroundColor: '#8B0000' } },
+                        socialButtonsBlockButton: { padding: '12px', border: '2px solid #E2E8F0', '&:hover': { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' } },
+                        formFieldInput: { padding: '12px', border: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', '&:focus': { borderColor: '#C41E3A', boxShadow: '0 0 0 4px rgba(196, 30, 58, 0.1)' } },
+                        footerActionLink: { color: '#C41E3A', fontWeight: 'bold', '&:hover': { color: '#8B0000' } },
                       },
-                    },
-                    socialButtonsBlockButton: {
-                      padding: '12px',
-                      border: '2px solid #E2E8F0',
-                      '&:hover': {
-                        backgroundColor: '#F8FAFC',
-                        borderColor: '#CBD5E1',
-                      },
-                    },
-                    formFieldInput: {
-                      padding: '12px',
-                      border: '2px solid #E2E8F0',
-                      backgroundColor: '#F8FAFC',
-                      '&:focus': {
-                        borderColor: '#C41E3A',
-                        boxShadow: '0 0 0 4px rgba(196, 30, 58, 0.1)',
-                      },
-                    },
-                    footerActionLink: {
-                      color: '#C41E3A',
-                      fontWeight: 'bold',
-                      '&:hover': {
-                        color: '#8B0000',
-                      },
-                    },
-                  },
-                }}
-                redirectUrl="/"
-                signUpUrl="/register"
-              />
-            </Box>
+                    }}
+                    redirectUrl="/"
+                    signUpUrl="/register"
+                  />
+                </Box>
+              </Box>
+            )}
           </Paper>
         </Box>
       </Container>
