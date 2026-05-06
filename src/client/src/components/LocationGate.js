@@ -25,12 +25,41 @@ const LocationGate = ({ children }) => {
   const [distance, setDistance] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const checkIpLocation = async () => {
+    setLocationStatus('checking');
+    try {
+      // Use ipapi.co to get location from IP address
+      const response = await fetch('https://ipapi.co/json/');
+      const data = await response.json();
+      
+      if (data.latitude && data.longitude) {
+        const dist = calculateDistance(data.latitude, data.longitude, BIT_LAT, BIT_LNG);
+        setDistance(dist.toFixed(2));
+        
+        // Note: IP location is less accurate. We might need to be more lenient here.
+        // If they are in Ranchi (dist < 50km maybe?), we can allow it. For now, stick to threshold.
+        if (dist <= MAX_ALLOWED_DISTANCE_KM * 10) { // Increased threshold for IP inaccuracy
+          setLocationStatus('allowed');
+        } else {
+          setErrorMsg(`IP Location shows you are ${dist.toFixed(2)} km away.`);
+          setLocationStatus('blocked');
+        }
+      } else {
+        throw new Error("Invalid IP location data");
+      }
+    } catch (error) {
+      console.error("IP Geolocation failed:", error);
+      setErrorMsg('Failed to determine location via IP Address.');
+      setLocationStatus('error');
+    }
+  };
+
   const checkLocation = () => {
     setLocationStatus('checking');
     
     if (!navigator.geolocation) {
-      setErrorMsg('Geolocation is not supported by your browser.');
-      setLocationStatus('error');
+      // Fallback directly to IP if geolocation API is completely unsupported
+      checkIpLocation();
       return;
     }
 
@@ -49,13 +78,9 @@ const LocationGate = ({ children }) => {
         }
       },
       (error) => {
-        if (error.code === error.PERMISSION_DENIED) {
-          setErrorMsg('Location access was denied. We need your location to verify you are on campus.');
-          setLocationStatus('prompt');
-        } else {
-          setErrorMsg('Failed to retrieve your location. Please ensure GPS is enabled.');
-          setLocationStatus('error');
-        }
+        // If user denies permission, automatically fallback to IP tracking
+        console.log("Browser location denied. Falling back to IP tracking...");
+        checkIpLocation();
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
