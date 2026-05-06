@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ToastContainer } from 'react-toastify';
@@ -181,7 +181,7 @@ function App() {
                       </Layout>
                     </SignedIn>
                     <SignedOut>
-                      <RedirectToSignIn />
+                      <Navigate to="/login" replace />
                     </SignedOut>
                   </>
                 }
