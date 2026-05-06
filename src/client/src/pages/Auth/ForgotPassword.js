@@ -28,7 +28,7 @@ import {
   Send,
   Refresh,
 } from '@mui/icons-material';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from 'react-query';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { Link as RouterLink } from 'react-router-dom';

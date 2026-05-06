@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from 'react-query';
 import { ToastContainer } from 'react-toastify';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import 'react-toastify/dist/ReactToastify.css';

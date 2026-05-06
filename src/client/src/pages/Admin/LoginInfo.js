@@ -86,7 +86,7 @@ import {
   AccountCircle,
   AdminPanelSettings,
 } from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
