@@ -1,15 +1,15 @@
 {
-  "name": "college-dispensary",
+  "name": "dormdoc",
   "version": "1.0.0",
-  "description": "College Dispensary Management System - BIT Mesra",
-  "main": "server.js",
+  "description": "DormDoc — College Dispensary Management System for BIT Mesra",
+  "main": "src/server/server.js",
   "scripts": {
-    "build": "cd client && npm run build",
-    "start": "node server.js",
+    "build": "cd src/client && npm run build",
+    "start": "node src/server/server.js",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "nodemon server.js",
-    "client": "cd client && npm start",
-    "install-client": "cd client && npm install",
+    "server": "nodemon src/server/server.js",
+    "client": "cd src/client && npm start",
+    "install-client": "cd src/client && npm install",
     "heroku-postbuild": "npm run install-client && npm run build"
   },
   "keywords": [
@@ -18,10 +18,15 @@
     "medical",
     "management",
     "system",
-    "bit-mesra"
+    "bit-mesra",
+    "dormdoc"
   ],
-  "author": "BIT Mesra",
+  "author": "mightbeanshuu",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mightbeanshuu/DormDoc.git"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "mongoose": "^7.5.0",
