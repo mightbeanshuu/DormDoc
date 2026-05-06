@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SignIn } from '@clerk/clerk-react';
-import { Box, Container, Typography, Paper, Grid } from '@mui/material';
-import { School, AdminPanelSettings, LocalHospital, AccountBalance, FamilyRestroom } from '@mui/icons-material';
+import { Box, Container, Typography, Paper, Grid, Card, CardContent, IconButton } from '@mui/material';
+import { School, AdminPanelSettings, LocalHospital, AccountBalance, FamilyRestroom, ArrowBack } from '@mui/icons-material';
 
 const roles = [
   { id: 'student', title: 'Student', icon: <School fontSize="large" />, color: '#3b82f6', desc: 'Access medical records & book appointments' },
@@ -182,84 +182,86 @@ const ClerkLogin = () => {
               justifyContent: 'center',
             }}
           >
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              {/* Show logo on mobile where left panel is hidden */}
-              <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', mb: 3 }}>
-                <img src="/assets/bit_logo.png" alt="BIT Mesra Logo" style={{ width: 80, height: 80 }} />
+            {!selectedRole ? (
+              <Box>
+                <Box sx={{ textAlign: 'center', mb: 4 }}>
+                  <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', mb: 3 }}>
+                    <img src="/assets/bit_logo.png" alt="BIT Mesra Logo" style={{ width: 80, height: 80 }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: '800', mb: 1, color: '#1A365D' }}>
+                    Select Your Role
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#64748B' }}>
+                    Please choose how you want to log into the system
+                  </Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  {roles.map((role) => (
+                    <Grid item xs={12} sm={role.id === 'parent' ? 12 : 6} key={role.id}>
+                      <Card 
+                        onClick={() => handleRoleSelect(role.id)}
+                        sx={{ 
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease-in-out',
+                          border: '2px solid transparent',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: 6,
+                            borderColor: role.color,
+                          }
+                        }}
+                      >
+                        <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', p: 3 }}>
+                          <Box sx={{ color: role.color, mb: 1 }}>
+                            {React.cloneElement(role.icon, { fontSize: 'large' })}
+                          </Box>
+                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1E293B', mb: 0.5 }}>
+                            {role.title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {role.desc}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: '800', mb: 1, color: '#1A365D' }}>
-                Portal Login
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#64748B', mb: 3 }}>
-                Select your role and enter your credentials to access the system
-              </Typography>
-            </Box>
+            ) : (
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+                  <IconButton onClick={() => setSelectedRole(null)} sx={{ mr: 2, color: '#1A365D' }}>
+                    <ArrowBack />
+                  </IconButton>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: '800', color: '#1A365D' }}>
+                      {roles.find(r => r.id === selectedRole)?.title} Login
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#64748B' }}>
+                      Sign in to your account to continue
+                    </Typography>
+                  </Box>
+                </Box>
 
-            {/* Role Selection Tabs */}
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#1A365D', mb: 2, textTransform: 'uppercase', letterSpacing: 1 }}>
-                1. Select Role
-              </Typography>
-              <Grid container spacing={1}>
-                {roles.map((role) => (
-                  <Grid item xs={6} sm={4} key={role.id}>
-                    <Box
-                      onClick={() => handleRoleSelect(role.id)}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        border: '2px solid',
-                        borderColor: selectedRole === role.id ? role.color : '#e2e8f0',
-                        bgcolor: selectedRole === role.id ? `${role.color}10` : 'transparent',
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          borderColor: selectedRole === role.id ? role.color : '#cbd5e1',
-                          bgcolor: selectedRole === role.id ? `${role.color}10` : '#f8fafc',
-                        }
-                      }}
-                    >
-                      <Box sx={{ color: selectedRole === role.id ? role.color : '#64748B', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
-                        {React.cloneElement(role.icon, { fontSize: 'medium' })}
-                      </Box>
-                      <Typography variant="caption" sx={{ fontWeight: selectedRole === role.id ? 'bold' : 'normal', color: selectedRole === role.id ? '#1E293B' : '#64748B', display: 'block' }}>
-                        {role.title}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-
-            {/* Clerk Sign In Component */}
-            <Box sx={{ opacity: selectedRole ? 1 : 0.5, transition: 'opacity 0.3s', pointerEvents: selectedRole ? 'auto' : 'none' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#1A365D', mb: 2, textTransform: 'uppercase', letterSpacing: 1 }}>
-                2. Credentials
-              </Typography>
-              {!selectedRole && (
-                <Typography variant="caption" color="error" sx={{ display: 'block', mb: 2, textAlign: 'center', fontWeight: 'bold' }}>
-                  Please select a role above to enable login
-                </Typography>
-              )}
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <SignIn
-                  appearance={{
-                    elements: {
-                      rootBox: { width: '100%' },
-                      card: { width: '100%', boxShadow: 'none', border: 'none', padding: 0 },
-                      header: { display: 'none' },
-                      formButtonPrimary: { backgroundColor: '#C41E3A', padding: '12px', fontSize: '16px', fontWeight: 'bold', textTransform: 'none', '&:hover': { backgroundColor: '#8B0000' } },
-                      socialButtonsBlockButton: { padding: '12px', border: '2px solid #E2E8F0', '&:hover': { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' } },
-                      formFieldInput: { padding: '12px', border: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', '&:focus': { borderColor: '#C41E3A', boxShadow: '0 0 0 4px rgba(196, 30, 58, 0.1)' } },
-                      footerActionLink: { color: '#C41E3A', fontWeight: 'bold', '&:hover': { color: '#8B0000' } },
-                    },
-                  }}
-                  redirectUrl="/"
-                  signUpUrl="/register"
-                />
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <SignIn
+                    appearance={{
+                      elements: {
+                        rootBox: { width: '100%' },
+                        card: { width: '100%', boxShadow: 'none', border: 'none', padding: 0 },
+                        header: { display: 'none' },
+                        formButtonPrimary: { backgroundColor: '#C41E3A', padding: '12px', fontSize: '16px', fontWeight: 'bold', textTransform: 'none', '&:hover': { backgroundColor: '#8B0000' } },
+                        socialButtonsBlockButton: { padding: '12px', border: '2px solid #E2E8F0', '&:hover': { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' } },
+                        formFieldInput: { padding: '12px', border: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', '&:focus': { borderColor: '#C41E3A', boxShadow: '0 0 0 4px rgba(196, 30, 58, 0.1)' } },
+                        footerActionLink: { color: '#C41E3A', fontWeight: 'bold', '&:hover': { color: '#8B0000' } },
+                      },
+                    }}
+                    redirectUrl="/"
+                    signUpUrl="/register"
+                  />
+                </Box>
               </Box>
-            </Box>
+            )}
           </Paper>
         </Box>
       </Container>
