@@ -16,13 +16,13 @@ import {
 
 const CollegeHeader = () => {
   return (
-    <AppBar position="static" sx={{ bgcolor: '#1e3a8a', boxShadow: 3 }}>
+    <AppBar position="static" sx={{ background: 'linear-gradient(135deg, #C41E3A 0%, #8B0000 100%)', boxShadow: 3 }}>
       <Container maxWidth="xl">
         <Toolbar>
           {/* College Logo/Emblem */}
           <Box display="flex" alignItems="center" mr={3}>
             <Avatar
-              src="https://upload.wikimedia.org/wikipedia/en/thumb/f/f2/Birla_Institute_of_Technology%2C_Mesra_Logo.svg/1200px-Birla_Institute_of_Technology%2C_Mesra_Logo.svg.png"
+              src="/assets/bit_logo.png"
               alt="BIT Mesra Emblem"
               sx={{
                 width: 50,

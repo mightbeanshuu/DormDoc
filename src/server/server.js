@@ -80,22 +80,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminAuthRoutes);
-app.use('/api/student', studentRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/ambulance', ambulanceRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/qr', qrRoutes);
-app.use('/api/erp', erpRoutes);
-app.use('/api/chatbot', chatbotRoutes);
-app.use('/api/student', profileRoutes);
-app.use('/api', prescriptionRoutes);
-app.use('/api', inventoryRoutes);
-app.use('/api', ambulanceTrackingRoutes);
-
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -104,6 +88,23 @@ app.get('/api/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminAuthRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/ambulance', ambulanceRoutes);
+app.use('/api/chat', require('./routes/chat'));
+app.use('/api/ai', aiRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/qr', qrRoutes);
+app.use('/api/erp', erpRoutes);
+app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/student', profileRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/ambulance-tracking', ambulanceTrackingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

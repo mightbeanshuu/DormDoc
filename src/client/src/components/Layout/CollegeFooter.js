@@ -28,7 +28,7 @@ const CollegeFooter = () => {
     <Box
       component="footer"
       sx={{
-        bgcolor: '#1e3a8a',
+        bgcolor: '#1A365D',
         color: 'white',
         py: 6,
         mt: 'auto',

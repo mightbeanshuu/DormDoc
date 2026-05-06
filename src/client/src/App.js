@@ -8,6 +8,8 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import { ClerkAuthProvider } from './contexts/ClerkAuthContext';
 import Layout from './components/Layout/Layout';
+import DashboardRouter from './components/DashboardRouter';
+import LocationGate from './components/LocationGate';
 import ClerkLogin from './pages/Auth/ClerkLogin';
 import ClerkRegister from './pages/Auth/ClerkRegister';
 import TestPage from './TestPage';
@@ -19,7 +21,8 @@ import BookAppointment from './pages/Student/BookAppointment';
 import EmergencySOS from './pages/Student/EmergencySOS';
 import AmbulanceBooking from './pages/Student/AmbulanceBooking';
 import Prescriptions from './pages/Student/Prescriptions';
-import Chatbot from './pages/Student/Chatbot';
+import ChatbotPage from './pages/Student/Chatbot';
+import ChatbotComponent from './components/Chatbot';
 import DoctorManagement from './pages/Admin/DoctorManagement';
 import AmbulanceManagement from './pages/Admin/AmbulanceManagement';
 import QueueManagement from './pages/Admin/QueueManagement';
@@ -130,6 +133,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ClerkAuthProvider>
           <Router>
+            <LocationGate>
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<ClerkLogin />} />
@@ -143,15 +147,17 @@ function App() {
                     <SignedIn>
                       <Layout>
                         <Routes>
+                          {/* Dynamic Root Dashboard Route */}
+                          <Route index element={<DashboardRouter />} />
+                          
                           {/* Student Routes */}
-                          <Route index element={<StudentDashboard />} />
                           <Route path="appointments" element={<Appointments />} />
                           <Route path="book-appointment" element={<BookAppointment />} />
                           <Route path="emergency-sos" element={<EmergencySOS />} />
                           <Route path="ambulance-booking" element={<AmbulanceBooking />} />
                           <Route path="prescriptions" element={<PrescriptionManagement />} />
                           <Route path="leave-application" element={<LeaveApplication />} />
-                          <Route path="chatbot" element={<Chatbot />} />
+                          <Route path="chatbot" element={<ChatbotPage />} />
                           
                           {/* Admin Routes */}
                           <Route path="doctors" element={<DoctorManagement />} />
@@ -181,6 +187,8 @@ function App() {
                 }
               />
             </Routes>
+            </LocationGate>
+            <ChatbotComponent />
             <ToastContainer />
           </Router>
         </ClerkAuthProvider>
