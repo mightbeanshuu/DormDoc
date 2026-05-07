@@ -95,7 +95,7 @@ const Layout = ({ children }) => {
   const getMenuItems = () => {
         if (user?.role === 'student') {
           return [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/' },
+            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
             { text: 'Book Appointment', icon: <LocalHospital />, path: '/book-appointment' },
             { text: 'My Appointments', icon: <Queue />, path: '/appointments' },
             { text: 'Emergency SOS', icon: <Warning />, path: '/emergency-sos' },
@@ -107,14 +107,28 @@ const Layout = ({ children }) => {
           ];
         } else if (user?.role === 'doctor') {
           return [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/' },
+            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
             { text: 'Today\'s Appointments', icon: <LocalHospital />, path: '/doctor-dashboard' },
             { text: 'Patient Chat', icon: <Chat />, path: '/patient-chat' },
             { text: 'Profile', icon: <Person />, path: '/profile' },
           ];
-        } else {
+        } else if (user?.role === 'hod') {
           return [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/' },
+            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
+            { text: 'Leave Approvals', icon: <Assignment />, path: '/leave-requests' },
+            { text: 'Department Analytics', icon: <Analytics />, path: '/analytics' },
+            { text: 'Profile', icon: <Person />, path: '/profile' },
+          ];
+        } else if (user?.role === 'parent') {
+          return [
+            { text: 'Ward Overview', icon: <Dashboard />, path: '/dashboard' },
+            { text: 'Medical Records', icon: <Medication />, path: '/prescriptions' },
+            { text: 'AI Support', icon: <Chat />, path: '/chatbot' },
+            { text: 'Profile', icon: <Person />, path: '/profile' },
+          ];
+        } else if (user?.role === 'admin') {
+          return [
+            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
             { text: 'Doctors', icon: <LocalHospital />, path: '/doctors' },
             { text: 'Ambulances', icon: <DirectionsCar />, path: '/ambulances' },
             { text: 'Queue Management', icon: <Queue />, path: '/queue' },
@@ -127,6 +141,8 @@ const Layout = ({ children }) => {
             { text: 'Login Info', icon: <Security />, path: '/login-info' },
             { text: 'Profile', icon: <Person />, path: '/profile' },
           ];
+        } else {
+          return [];
         }
       };
 
@@ -300,7 +316,11 @@ const Layout = ({ children }) => {
               </IconButton>
 
               <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, color: '#1e3a8a', fontWeight: 'bold' }}>
-                {user?.role === 'student' ? 'Student Portal' : 'Admin Portal'}
+                {user?.role === 'student' ? 'Student Portal' :
+                 user?.role === 'doctor' ? 'Medical Faculty Portal' :
+                 user?.role === 'hod' ? 'HOD Portal' :
+                 user?.role === 'parent' ? 'Parent Portal' :
+                 'Admin Portal'}
               </Typography>
               <IconButton color="inherit" sx={{ mr: 2, color: '#1e3a8a' }}>
                 <Badge badgeContent={0} color="error">

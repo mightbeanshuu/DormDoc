@@ -9,6 +9,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "nodemon src/server/server.js",
     "client": "cd src/client && npm start",
+    "seed": "node scripts/seed.js",
     "install-client": "cd src/client && npm install",
     "heroku-postbuild": "npm run install-client && npm run build"
   },

@@ -213,7 +213,7 @@ const ClerkLogin = () => {
                       >
                         <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', p: 3 }}>
                           <Box sx={{ color: role.color, mb: 1 }}>
-                            {role.icon}
+                            {React.cloneElement(role.icon, { fontSize: 'large' })}
                           </Box>
                           <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1E293B', mb: 0.5 }}>
                             {role.title}
@@ -256,7 +256,7 @@ const ClerkLogin = () => {
                         footerActionLink: { color: '#C41E3A', fontWeight: 'bold', '&:hover': { color: '#8B0000' } },
                       },
                     }}
-                    redirectUrl="/"
+                    redirectUrl="/dashboard"
                     signUpUrl="/register"
                   />
                 </Box>

@@ -27,9 +27,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import axios from 'axios';
+import { useClerkAuth } from '../../contexts/ClerkAuthContext';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const { mongoUser } = useClerkAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -164,6 +166,46 @@ const StudentDashboard = () => {
                   Emergency SOS
                 </Button>
               </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* User Profile Summary */}
+        <Grid item xs={12} md={12}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={2} mb={2}>
+                <Avatar sx={{ bgcolor: '#1A365D', width: 56, height: 56 }}>
+                  <Person fontSize="large" />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">{mongoUser?.name || studentInfo?.name || 'Student'}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {mongoUser?.email || 'No email provided'}
+                  </Typography>
+                </Box>
+              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Roll Number</Typography>
+                  <Typography variant="body1" fontWeight="bold">{mongoUser?.studentId || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Department</Typography>
+                  <Typography variant="body1" fontWeight="bold">{mongoUser?.department || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Phone</Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {mongoUser?.phone || 'Not verified'}
+                    {mongoUser?.phone && <Chip label="Verified" size="small" color="success" sx={{ ml: 1, height: 20 }} />}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Blood Group</Typography>
+                  <Typography variant="body1" fontWeight="bold">{mongoUser?.bloodGroup || 'N/A'}</Typography>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>

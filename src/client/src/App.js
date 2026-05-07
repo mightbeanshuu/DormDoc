@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ToastContainer } from 'react-toastify';
@@ -38,6 +38,7 @@ import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import PatientChat from './pages/Doctor/PatientChat';
 import LoginInfo from './pages/Admin/LoginInfo';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import Onboarding from './pages/Auth/Onboarding';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -135,9 +136,11 @@ function App() {
           <Router>
             <LocationGate>
             <Routes>
-              {/* Public Routes */}
+              {/* Public Root Route - Always show the role selection/login first */}
+              <Route path="/" element={<ClerkLogin />} />
               <Route path="/login" element={<ClerkLogin />} />
               <Route path="/register" element={<ClerkRegister />} />
+              <Route path="/onboarding" element={<Onboarding />} />
               
               {/* Protected Routes */}
               <Route
@@ -147,8 +150,9 @@ function App() {
                     <SignedIn>
                       <Layout>
                         <Routes>
-                          {/* Dynamic Root Dashboard Route */}
-                          <Route index element={<DashboardRouter />} />
+                          {/* Dynamic Dashboard Route */}
+                          <Route path="dashboard" element={<DashboardRouter />} />
+                          <Route index element={<Navigate to="dashboard" replace />} />
                           
                           {/* Student Routes */}
                           <Route path="appointments" element={<Appointments />} />
@@ -181,7 +185,7 @@ function App() {
                       </Layout>
                     </SignedIn>
                     <SignedOut>
-                      <RedirectToSignIn />
+                      <Navigate to="/login" replace />
                     </SignedOut>
                   </>
                 }
