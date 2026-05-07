@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: dormdoc
+    env: node
+    region: singapore # Closest to India for best latency
+    buildCommand: npm run heroku-postbuild
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false # You will enter this in the Render Dashboard
+      - key: JWT_SECRET
+        sync: false # You will enter this in the Render Dashboard
+      - key: REACT_APP_CLERK_PUBLISHABLE_KEY
+        sync: false # You will enter this in the Render Dashboard
