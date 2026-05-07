@@ -198,7 +198,7 @@ function generateFaculty(count = 400) {
     faculty.push({
       facultyId: `BIT-FAC-${String(i).padStart(4, '0')}`,
       name,
-      email: `${slugify(name)}@bitmesra.ac.in`,
+      email: `${slugify(name)}.f${String(i).padStart(4, '0')}@bitmesra.ac.in`,
       phone: randPhone(),
       dob: new Date(1965 + randInt(0, 20), randInt(0, 11), randInt(1, 28)),
       gender: Math.random() > 0.35 ? 'male' : 'female',
@@ -283,7 +283,7 @@ function generateDispensaryStaff() {
     return {
       staffId: `DISP-${String(i + 1).padStart(3, '0')}`,
       name,
-      email: `${slugify(name)}.disp@bitmesra.ac.in`,
+      email: `${slugify(name)}.d${String(i + 1).padStart(3, '0')}@bitmesra.ac.in`,
       phone: randPhone(),
       dob: new Date(1970 + randInt(0, 25), randInt(0, 11), randInt(1, 28)),
       gender: Math.random() > 0.5 ? 'male' : 'female',
@@ -311,43 +311,20 @@ function generateDispensaryStaff() {
 async function seed() {
   try {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/college-dispensary';
-    console.log('\n🌱 DormDoc Seed Script');
+    console.log('\n🌱 DormDoc Seed Script (Faculty + Staff only)');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`📡 Connecting to MongoDB at ${uri}`);
 
     await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
     console.log('✅ Connected to MongoDB\n');
 
-    // Clear existing data (comment out in production!)
-    console.log('🗑  Clearing existing data...');
+    // Only clear Faculty and Staff (Students/Parents already in Atlas)
+    console.log('🗑  Clearing Faculty and Staff...');
     await Promise.all([
-      Student.deleteMany({}),
-      Parent.deleteMany({}),
       Faculty.deleteMany({}),
       DispensaryStaff.deleteMany({}),
     ]);
     console.log('✅ Cleared\n');
-
-    // ── Students
-    console.log('👩‍🎓 Generating Students (6,000)...');
-    const studentDocs = generateStudents(6000);
-    const savedStudents = await Student.insertMany(studentDocs.slice(0, BATCH_SIZE), { ordered: false });
-    let allStudentIds = [...savedStudents];
-
-    // Insert remaining in batches
-    for (let i = BATCH_SIZE; i < studentDocs.length; i += BATCH_SIZE) {
-      const batch = studentDocs.slice(i, i + BATCH_SIZE);
-      const res = await Student.insertMany(batch, { ordered: false });
-      allStudentIds = [...allStudentIds, ...res];
-      process.stdout.write(`\r  ✅ ${Math.min(i + BATCH_SIZE, 6000).toLocaleString()} / 6,000 students inserted`);
-    }
-    console.log(`\n✅ ${allStudentIds.length.toLocaleString()} Students inserted\n`);
-
-    // ── Parents (linked to students)
-    console.log('👨‍👩‍👧 Generating Parents (6,000)...');
-    const parentDocs = generateParents(allStudentIds);
-    await insertInBatches(Parent, parentDocs, 'Parents');
-    console.log(`✅ ${parentDocs.length.toLocaleString()} Parents inserted\n`);
 
     // ── Faculty
     console.log('👨‍🏫 Generating Faculty (400)...');
@@ -370,7 +347,7 @@ async function seed() {
     ]);
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📊 Database Seeding Complete!');
+    console.log('📊 Database Summary (Atlas)');
     console.log(`   Students:          ${counts[0].toLocaleString()}`);
     console.log(`   Parents:           ${counts[1].toLocaleString()}`);
     console.log(`   Faculty:           ${counts[2].toLocaleString()}`);
@@ -388,3 +365,4 @@ async function seed() {
 }
 
 seed();
+
