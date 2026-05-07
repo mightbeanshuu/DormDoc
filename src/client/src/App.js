@@ -38,6 +38,7 @@ import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import PatientChat from './pages/Doctor/PatientChat';
 import LoginInfo from './pages/Admin/LoginInfo';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import Onboarding from './pages/Auth/Onboarding';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -139,6 +140,7 @@ function App() {
               <Route path="/" element={<ClerkLogin />} />
               <Route path="/login" element={<ClerkLogin />} />
               <Route path="/register" element={<ClerkRegister />} />
+              <Route path="/onboarding" element={<Onboarding />} />
               
               {/* Protected Routes */}
               <Route

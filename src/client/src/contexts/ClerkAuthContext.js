@@ -16,12 +16,44 @@ export const ClerkAuthProvider = ({ children }) => {
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const { signOut } = useClerk();
   const [loading, setLoading] = useState(true);
+  const [mongoUser, setMongoUser] = useState(null);
+
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    if (userLoaded && authLoaded) {
-      setLoading(false);
-    }
-  }, [userLoaded, authLoaded]);
+    const syncUser = async () => {
+      if (userLoaded && authLoaded && user) {
+        try {
+          const role = localStorage.getItem('pendingRole') || user.publicMetadata?.role || 'student';
+          const res = await fetch('/api/clerk-auth/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clerkUserId: user.id,
+              email: user.primaryEmailAddress?.emailAddress,
+              name: user.fullName,
+              role,
+            }),
+          });
+          const data = await res.json();
+          if (data.user) {
+            setMongoUser(data.user);
+          }
+          if (data.needsOnboarding) {
+            setNeedsOnboarding(true);
+          }
+        } catch (error) {
+          console.error('Failed to sync user with DB:', error);
+        } finally {
+          setLoading(false);
+        }
+      } else if (userLoaded && authLoaded) {
+        setLoading(false);
+      }
+    };
+    
+    syncUser();
+  }, [user, userLoaded, authLoaded]);
 
   const login = async (email, password) => {
     // Clerk handles login automatically
@@ -123,6 +155,10 @@ export const ClerkAuthProvider = ({ children }) => {
     getUserQRCode,
     regenerateQRCode,
     isSignedIn,
+    needsOnboarding,
+    setNeedsOnboarding,
+    mongoUser,
+    setMongoUser,
   };
 
   return (

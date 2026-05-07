@@ -10,10 +10,14 @@ import HodDashboard from '../pages/HOD/HodDashboard';
 import ParentDashboard from '../pages/Parent/ParentDashboard';
 
 const DashboardRouter = () => {
-  const { user } = useClerkAuth();
+  const { user, needsOnboarding } = useClerkAuth();
 
   if (!user) {
     return <Navigate to="/login" />;
+  }
+
+  if (needsOnboarding) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   switch (user.role) {
