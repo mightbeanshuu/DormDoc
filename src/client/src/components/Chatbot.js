@@ -9,7 +9,7 @@ import {
   Button,
   List,
   ListItem,
-  ListItemText,
+
   Avatar,
   CircularProgress
 } from '@mui/material';

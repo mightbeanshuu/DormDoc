@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -23,70 +23,28 @@ import {
   Grid,
   Avatar,
   Tooltip,
-  Alert,
-  Tabs,
-  Tab,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  DatePicker,
-  LocalizationProvider,
-  AdapterDateFns,
 } from '@mui/material';
 import {
   Search,
-  FilterList,
   Refresh,
   Visibility,
-  VisibilityOff,
-  Email,
-  Phone,
-  LocationOn,
   AccessTime,
-  Security,
   Person,
   School,
-  Work,
-  Star,
   Warning,
   CheckCircle,
-  Info,
   Download,
-  Print,
-  Delete,
-  Edit,
-  Add,
-  History,
-  Dashboard,
-  Analytics,
-  LocalHospital,
-  DirectionsCar,
-  Queue,
-  Chat,
-  Assignment,
-  QrCodeScanner,
-  LocalPharmacy,
-  Inventory,
-  TrackChanges,
-  CrisisAlert,
-  Schedule,
   MedicalServices,
-  Description,
-  AttachFile,
-  CalendarToday,
-  FileUpload,
-  Bloodtype,
-  Badge,
-  Notifications,
-  Security as SecurityIcon,
   VpnKey,
   Lock,
   LockOpen,
-  AccountCircle,
   AdminPanelSettings,
 } from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation } from 'react-query';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
@@ -96,11 +54,6 @@ const LoginInfo = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedUser, setSelectedUser] = useState(null);
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState(0);
-  const [dateRange, setDateRange] = useState({
-    start: null,
-    end: null,
-  });
 
   // Fetch all login information
   const { data: loginInfo, isLoading, refetch } = useQuery({
@@ -122,7 +75,7 @@ const LoginInfo = () => {
   });
 
   // Fetch recent login attempts
-  const { data: recentLogins } = useQuery({
+  useQuery({
     queryKey: ['recentLogins'],
     queryFn: async () => {
       const response = await axios.get('/api/admin/recent-logins');

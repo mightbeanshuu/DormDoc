@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
   Card,
   CardContent,
   Grid,
-  Paper,
   Avatar,
   Chip,
   List,
@@ -13,7 +12,6 @@ import {
   ListItemText,
   ListItemIcon,
   ListItemAvatar,
-  Divider,
   CircularProgress,
   Alert,
   Tabs,
@@ -23,15 +21,12 @@ import {
   Select,
   MenuItem,
   Button,
-  IconButton,
-  Tooltip,
   LinearProgress,
 } from '@mui/material';
 import {
   TrendingUp,
   TrendingDown,
   People,
-  LocalHospital,
   Schedule,
   Warning,
   CheckCircle,
@@ -43,19 +38,10 @@ import {
   Analytics as AnalyticsIcon,
   Refresh,
   Download,
-  FilterList,
-  DateRange,
   Assessment,
   BarChart,
-  PieChart,
   Timeline,
-  HealthAndSafety,
   School,
-  Group,
-  Assignment,
-  LocalPharmacy,
-  DirectionsCar,
-  QrCodeScanner,
 } from '@mui/icons-material';
 import { useQuery } from 'react-query';
 import axios from 'axios';
@@ -67,7 +53,7 @@ const Analytics = () => {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Fetch analytics data
-  const { data: analyticsData, isLoading, error, refetch } = useQuery(
+  const { data: analyticsData, isLoading, error } = useQuery(
     ['analytics', dateRange, refreshKey],
     async () => {
       const response = await axios.get(`/api/analytics/dashboard?range=${dateRange}`);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -18,12 +18,7 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  Divider,
-  Alert,
   CircularProgress,
-  LinearProgress,
-  Badge,
   IconButton,
   Tooltip,
   Dialog,
@@ -35,59 +30,26 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
   Tabs,
   Tab,
 } from '@mui/material';
 import {
   MedicalServices,
   Person,
-  Phone,
-  Email,
-  LocationOn,
-  AccessTime,
   CheckCircle,
   Warning,
   Info,
   Refresh,
-  Edit,
-  Delete,
   Add,
   Search,
-  FilterList,
-  LocalHospital,
-  CrisisAlert,
-  TrackChanges,
   Visibility,
-  Assignment,
-  School,
   Send,
-  QrCode,
   Print,
-  Approved,
-  Rejected,
-  Pending,
   Schedule,
-  History,
-  Dashboard,
-  Queue,
-  Analytics,
   Chat,
   DirectionsCar,
   Medication,
-  LocalPharmacy,
   CalendarToday,
-  FileUpload,
-  AttachFile,
-  Description,
-  Work,
-  Star,
-  QrCodeScanner,
-  Email as EmailIcon,
-  Print as PrintIcon,
   PlayArrow,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
@@ -98,7 +60,7 @@ import { useAuth } from '../../contexts/AuthContext';
 const DoctorDashboard = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [, setSelectedPatient] = useState(null);
   const [prescriptionData, setPrescriptionData] = useState({
     patientId: '',
     medication: '',
@@ -134,7 +96,7 @@ const DoctorDashboard = () => {
   );
 
   // Fetch recent patients
-  const { data: recentPatients = [], isLoading: patientsLoading, refetch: refetchPatients } = useQuery(
+  const { data: recentPatients = [],  refetch: refetchPatients } = useQuery(
     'doctor-recent-patients',
     () => axios.get('/api/doctor/patients/recent').then(res => res.data),
     {
@@ -154,7 +116,7 @@ const DoctorDashboard = () => {
   );
 
   // Fetch patients for prescription
-  const { data: patients = [], isLoading: patientsListLoading } = useQuery(
+  const { data: patients = [] } = useQuery(
     'doctor-patients-list',
     () => axios.get('/api/doctor/patients').then(res => res.data),
     {
@@ -164,7 +126,7 @@ const DoctorDashboard = () => {
   );
 
   // Fetch ambulances for booking
-  const { data: ambulances = [], isLoading: ambulancesLoading } = useQuery(
+  useQuery(
     'available-ambulances',
     () => axios.get('/api/doctor/ambulances/available').then(res => res.data),
     {

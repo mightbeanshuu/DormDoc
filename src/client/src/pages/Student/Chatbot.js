@@ -28,7 +28,6 @@ import {
   Info,
 } from '@mui/icons-material';
 import axios from 'axios';
-import { toast } from 'react-toastify';
 
 const Chatbot = () => {
   const [messages, setMessages] = useState([

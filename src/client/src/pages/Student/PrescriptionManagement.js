@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -19,43 +19,30 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Chip,
   Avatar,
   Alert,
   CircularProgress,
-  Fab,
   Tooltip,
   Divider,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  ListItemAvatar,
 } from '@mui/material';
 import {
   Add,
-  Upload,
   Download,
   Visibility,
-  Edit,
   Delete,
   Medication,
   LocalPharmacy,
   Person,
   CalendarToday,
-  AccessTime,
   CheckCircle,
   Warning,
-  Info,
   FileUpload,
-  AttachFile,
-  Description,
   Assignment,
-  School,
   Send,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
@@ -63,7 +50,6 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 
 const PrescriptionManagement = () => {
-  const [openDialog, setOpenDialog] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [uploadDialog, setUploadDialog] = useState(false);
   const [prescriptionData, setPrescriptionData] = useState({

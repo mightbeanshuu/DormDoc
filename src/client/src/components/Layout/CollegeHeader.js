@@ -10,7 +10,6 @@ import {
 } from '@mui/material';
 import {
   LocalHospital,
-  School,
   LocationOn,
 } from '@mui/icons-material';
 

@@ -12,7 +12,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -27,15 +26,7 @@ import {
   Avatar,
   Alert,
   CircularProgress,
-  Fab,
   Tooltip,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemAvatar,
-  Badge,
 } from '@mui/material';
 import {
   Add,
@@ -46,18 +37,11 @@ import {
   Phone,
   Email,
   AccessTime,
-  LocationOn,
-  MedicalServices,
-  School,
-  Work,
-  Star,
   CheckCircle,
   Cancel,
   Search,
-  FilterList,
   Refresh,
   Visibility,
-  QrCode,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';
