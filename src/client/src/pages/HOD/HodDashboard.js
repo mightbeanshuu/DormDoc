@@ -1,6 +1,11 @@
 import React from 'react';
 import { Box, Typography, Grid, Paper, Card, CardContent, Divider, Avatar, LinearProgress } from '@mui/material';
-import { AccountBalance, Assignment, PendingActions, CheckCircle, TrendingUp } from '@mui/icons-material';
+import {
+  AccountBalance,
+  Assignment,
+  PendingActions,
+  TrendingUp,
+} from '@mui/icons-material';
 
 const HodDashboard = () => {
   return (

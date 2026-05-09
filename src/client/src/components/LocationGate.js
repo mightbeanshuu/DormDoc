@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, CircularProgress, Button, Paper, Tooltip, IconButton } from '@mui/material';
+import { Box, Typography, CircularProgress, Button, Paper } from '@mui/material';
 import { LocationOff, LocationOn, ErrorOutline, AdminPanelSettings } from '@mui/icons-material';
 import { useClerkAuth } from '../contexts/ClerkAuthContext';
 

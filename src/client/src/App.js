@@ -13,14 +13,11 @@ import LocationGate from './components/LocationGate';
 import ClerkLogin from './pages/Auth/ClerkLogin';
 import ClerkRegister from './pages/Auth/ClerkRegister';
 import TestPage from './TestPage';
-import StudentDashboard from './pages/Student/StudentDashboard';
-import AdminDashboard from './pages/Admin/AdminDashboard';
 import Profile from './pages/Profile/Profile';
 import Appointments from './pages/Student/Appointments';
 import BookAppointment from './pages/Student/BookAppointment';
 import EmergencySOS from './pages/Student/EmergencySOS';
 import AmbulanceBooking from './pages/Student/AmbulanceBooking';
-import Prescriptions from './pages/Student/Prescriptions';
 import ChatbotPage from './pages/Student/Chatbot';
 import ChatbotComponent from './components/Chatbot';
 import DoctorManagement from './pages/Admin/DoctorManagement';
@@ -37,7 +34,6 @@ import AmbulanceTracking from './pages/Admin/AmbulanceTracking';
 import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import PatientChat from './pages/Doctor/PatientChat';
 import LoginInfo from './pages/Admin/LoginInfo';
-import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Onboarding from './pages/Auth/Onboarding';
 
 // Create a client

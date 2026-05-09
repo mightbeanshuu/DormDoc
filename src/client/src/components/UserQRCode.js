@@ -33,7 +33,6 @@ import { useState, useEffect } from 'react';
 const UserQRCode = ({ user, size = 200, showDetails = false }) => {
   const [qrCodeDataURL, setQrCodeDataURL] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [qrCodeCanvas, setQrCodeCanvas] = useState(null);
 
   // Generate QR code data
   const generateQRData = (user) => {
@@ -62,8 +61,6 @@ const UserQRCode = ({ user, size = 200, showDetails = false }) => {
       
       try {
         const qrData = generateQRData(user);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
         
         // Generate QR code
         const qrCodeDataURL = await QRCode.toDataURL(qrData, {
@@ -77,7 +74,6 @@ const UserQRCode = ({ user, size = 200, showDetails = false }) => {
         });
         
         setQrCodeDataURL(qrCodeDataURL);
-        setQrCodeCanvas(canvas);
       } catch (error) {
         console.error('Error generating QR code:', error);
       }

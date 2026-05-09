@@ -11,7 +11,8 @@
     "client": "cd src/client && npm start",
     "seed": "node scripts/seed.js",
     "install-client": "cd src/client && npm install",
-    "heroku-postbuild": "npm run install-client && npm run build"
+    "heroku-postbuild": "npm run install-client && npm run build",
+    "prepare": "husky"
   },
   "keywords": [
     "college",
@@ -48,10 +49,17 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
+  },
+  "lint-staged": {
+    "src/client/src/**/*.{js,jsx}": [
+      "npm run lint --prefix src/client"
+    ]
   }
 }

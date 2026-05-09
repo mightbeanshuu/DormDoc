@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -16,14 +16,7 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  Divider,
-  Alert,
   CircularProgress,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
   Tabs,
   Tab,
   Dialog,
@@ -39,15 +32,10 @@ import {
   Paper,
   IconButton,
   Tooltip,
-  Badge,
-  LinearProgress,
 } from '@mui/material';
 import {
   Assignment,
-  School,
   Send,
-  CalendarToday,
-  AccessTime,
   CheckCircle,
   Warning,
   Info,
@@ -56,33 +44,14 @@ import {
   Delete,
   Add,
   Search,
-  FilterList,
-  MedicalServices,
-  LocalHospital,
-  Description,
-  AttachFile,
-  Person,
-  Email,
-  Phone,
-  LocationOn,
-  Work,
-  Star,
-  QrCode,
-  Print,
-  Approved,
-  Rejected,
-  Pending,
   Schedule,
   History,
-  Dashboard,
-  Queue,
   Analytics,
-  Chat,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../contexts/AuthContext';
+
 
 const LeaveApplication = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -103,7 +72,6 @@ const LeaveApplication = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // Fetch user's leave applications
@@ -117,7 +85,7 @@ const LeaveApplication = () => {
   );
 
   // Fetch prescriptions for leave application
-  const { data: prescriptions = [], isLoading: prescriptionsLoading } = useQuery(
+  const { data: prescriptions = [] } = useQuery(
     'user-prescriptions',
     () => axios.get('/api/student/prescriptions').then(res => res.data),
     {

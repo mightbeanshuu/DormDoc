@@ -91,13 +91,8 @@ export const ClerkAuthProvider = ({ children }) => {
   };
 
   const changePassword = async (currentPassword, newPassword) => {
-    try {
-      // Clerk handles password changes
-      return { success: true };
-    } catch (error) {
-      console.error('Change password error:', error);
-      return { success: false, error: error.message };
-    }
+    // Clerk handles password changes
+    return { success: true };
   };
 
   const getUserQRCode = () => {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { toast } from 'react-toastify';
@@ -15,6 +15,7 @@ export const useSocket = () => {
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
+  const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
   const { user } = useAuth();
 
@@ -97,13 +98,15 @@ export const SocketProvider = ({ children }) => {
       });
 
       setSocket(newSocket);
+      socketRef.current = newSocket;
 
       return () => {
         newSocket.close();
       };
     } else {
-      if (socket) {
-        socket.close();
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
         setSocket(null);
         setConnected(false);
       }

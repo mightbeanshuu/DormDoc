@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -25,46 +25,25 @@ import {
   MenuItem,
   Chip,
   Avatar,
-  Alert,
   CircularProgress,
   Tabs,
   Tab,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemAvatar,
-  Badge,
-  Tooltip,
   Stepper,
   Step,
   StepLabel,
-  StepContent,
   LinearProgress,
 } from '@mui/material';
 import {
   LocationOn,
   DirectionsCar,
-  Person,
-  Phone,
-  AccessTime,
   CheckCircle,
-  Warning,
-  Info,
   Refresh,
   PlayArrow,
-  Pause,
-  Stop,
-  Navigation,
-  MyLocation,
-  Schedule,
   LocalHospital,
   CrisisAlert,
   TrackChanges,
   Visibility,
-  Edit,
-  Delete,
   Add,
   Search,
   FilterList,
@@ -122,7 +101,7 @@ const AmbulanceTracking = () => {
   );
 
   // Fetch drivers
-  const { data: drivers } = useQuery(
+  useQuery(
     'drivers',
     async () => {
       const response = await axios.get('/api/admin/drivers');

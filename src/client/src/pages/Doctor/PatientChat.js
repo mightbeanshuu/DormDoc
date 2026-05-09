@@ -12,8 +12,6 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
-  Divider,
-  Alert,
   CircularProgress,
   Badge,
   IconButton,
@@ -21,71 +19,19 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Chip,
   Paper,
   InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
 } from '@mui/material';
 import {
   Chat,
   Send,
   Person,
-  Phone,
-  Email,
-  LocationOn,
-  AccessTime,
-  CheckCircle,
-  Warning,
-  Info,
-  Refresh,
-  Edit,
-  Delete,
-  Add,
   Search,
-  FilterList,
-  MedicalServices,
-  LocalHospital,
-  CrisisAlert,
-  TrackChanges,
-  Visibility,
-  Assignment,
-  School,
-  QrCode,
-  Print,
-  Approved,
-  Rejected,
-  Pending,
-  Schedule,
-  History,
-  Dashboard,
-  Queue,
-  Analytics,
-  DirectionsCar,
-  Medication,
-  LocalPharmacy,
-  CalendarToday,
-  FileUpload,
-  AttachFile,
-  Description,
-  Work,
-  Star,
-  QrCodeScanner,
-  Email as EmailIcon,
-  Print as PrintIcon,
-  VideoCall,
   Call,
   MoreVert,
   AttachFile as AttachFileIcon,
   EmojiEmotions,
-  Mic,
   MicOff,
   Videocam,
   VideocamOff,
@@ -96,22 +42,18 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 
 const PatientChat = () => {
-  const [activeTab, setActiveTab] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [openVideoCall, setOpenVideoCall] = useState(false);
   const [openAudioCall, setOpenAudioCall] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
   const messagesEndRef = useRef(null);
 
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // Fetch doctor's patients for chat
-  const { data: chatPatients = [], isLoading: patientsLoading, refetch: refetchPatients } = useQuery(
+  const { data: chatPatients = [], isLoading: patientsLoading } = useQuery(
     'doctor-chat-patients',
     () => axios.get('/api/doctor/chat/patients').then(res => res.data),
     {
@@ -121,7 +63,7 @@ const PatientChat = () => {
   );
 
   // Fetch chat messages with selected patient
-  const { data: chatMessages = [], isLoading: messagesLoading, refetch: refetchMessages } = useQuery(
+  const { data: chatMessages = [], isLoading: messagesLoading } = useQuery(
     ['chat-messages', selectedPatient?._id],
     () => selectedPatient ? axios.get(`/api/doctor/chat/messages/${selectedPatient._id}`).then(res => res.data) : Promise.resolve([]),
     {
@@ -132,7 +74,7 @@ const PatientChat = () => {
   );
 
   // Fetch online patients
-  const { data: onlinePatients = [], isLoading: onlineLoading } = useQuery(
+  const { data: onlinePatients = [] } = useQuery(
     'online-patients',
     () => axios.get('/api/doctor/chat/online-patients').then(res => res.data),
     {

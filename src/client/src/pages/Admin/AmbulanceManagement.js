@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -28,61 +28,30 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  Divider,
-  Alert,
   CircularProgress,
-  Fab,
   Tooltip,
-  Badge,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
   Tabs,
   Tab,
 } from '@mui/material';
 import {
   DirectionsCar,
   Person,
-  Phone,
   LocationOn,
-  AccessTime,
   CheckCircle,
   Warning,
   Info,
   Refresh,
   PlayArrow,
   Pause,
-  Stop,
-  Navigation,
   MyLocation,
   Schedule,
-  LocalHospital,
   CrisisAlert,
   TrackChanges,
   Visibility,
   Edit,
-  Delete,
-  Add,
   Search,
-  FilterList,
-  MedicalServices,
-  Work,
-  Star,
-  QrCode,
-  Email,
-  Print,
-  Approved,
-  Rejected,
   Assignment,
-  School,
-  Send,
-  QrCodeScanner,
-  Dashboard,
   Queue,
-  Analytics,
-  Chat,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';
@@ -92,8 +61,6 @@ const AmbulanceManagement = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
-  const [queueData, setQueueData] = useState([]);
-  const [ambulanceData, setAmbulanceData] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -120,7 +87,7 @@ const AmbulanceManagement = () => {
   );
 
   // Fetch drivers
-  const { data: drivers = [], isLoading: driversLoading } = useQuery(
+  useQuery(
     'drivers',
     () => axios.get('/api/admin/drivers').then(res => res.data),
     {
@@ -130,7 +97,7 @@ const AmbulanceManagement = () => {
   );
 
   // Fetch students
-  const { data: students = [], isLoading: studentsLoading } = useQuery(
+  useQuery(
     'students',
     () => axios.get('/api/admin/students').then(res => res.data),
     {
@@ -169,32 +136,12 @@ const AmbulanceManagement = () => {
     }
   );
 
-  // Assign ambulance to queue item
-  const assignAmbulanceMutation = useMutation(
-    ({ queueId, ambulanceId, driverId }) => 
-      axios.post(`/api/admin/ambulance-queue/${queueId}/assign`, { ambulanceId, driverId }),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('ambulance-queue');
-        queryClient.invalidateQueries('ambulances');
-        toast.success('Ambulance assigned successfully');
-      },
-      onError: (error) => {
-        toast.error(error.response?.data?.message || 'Failed to assign ambulance');
-      }
-    }
-  );
-
   const handleStatusChange = (ambulanceId, newStatus, driverId = null) => {
     updateAmbulanceMutation.mutate({ id: ambulanceId, status: newStatus, driverId });
   };
 
   const handleQueueStatusChange = (queueId, newStatus, ambulanceId = null, estimatedTime = null) => {
     updateQueueMutation.mutate({ id: queueId, status: newStatus, ambulanceId, estimatedTime });
-  };
-
-  const handleAssignAmbulance = (queueId, ambulanceId, driverId) => {
-    assignAmbulanceMutation.mutate({ queueId, ambulanceId, driverId });
   };
 
   const getStatusColor = (status) => {

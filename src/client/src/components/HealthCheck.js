@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, CircularProgress, Alert } from '@mui/material';
+import { Box, Typography, CircularProgress } from '@mui/material';
 import { CheckCircle, Error } from '@mui/icons-material';
 
 const HealthCheck = () => {

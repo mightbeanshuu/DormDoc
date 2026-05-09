@@ -11,7 +11,6 @@ import {
   ListItemText,
   ListItemIcon,
   Avatar,
-  Grid,
   Tabs,
   Tab,
   Dialog,
@@ -24,13 +23,11 @@ import {
   Tooltip,
 } from '@mui/material';
 import {
-  LocalHospital,
   Schedule,
   Cancel,
   CheckCircle,
   AccessTime,
   Warning,
-  Person,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';

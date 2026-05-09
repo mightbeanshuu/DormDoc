@@ -9,13 +9,11 @@ import {
   Stepper,
   Step,
   StepLabel,
-  Alert,
   CircularProgress,
   Container,
   Paper,
   InputAdornment,
   IconButton,
-  Divider,
 } from '@mui/material';
 import {
   Email,
@@ -41,8 +39,8 @@ const ForgotPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
+  const [, setOtpSent] = useState(false);
+  const [, setOtpVerified] = useState(false);
 
   // Send OTP mutation
   const sendOtpMutation = useMutation({

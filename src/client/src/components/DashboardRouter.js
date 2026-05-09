@@ -1,6 +1,5 @@
 import React from 'react';
-import { Box, Typography, Paper } from '@mui/material';
-import { AccountBalance, FamilyRestroom } from '@mui/icons-material';
+
 import { Navigate } from 'react-router-dom';
 import { useClerkAuth } from '../contexts/ClerkAuthContext';
 import StudentDashboard from '../pages/Student/StudentDashboard';

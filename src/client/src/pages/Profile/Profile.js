@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -10,12 +10,10 @@ import {
   Button,
   Divider,
   Chip,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
   CircularProgress,
   Tabs,
   Tab,
@@ -37,11 +35,8 @@ import {
   Email,
   Phone,
   LocationOn,
-  School,
-  Bloodtype,
   Edit,
   Save,
-  Cancel,
   Security,
   Notifications,
   History,
@@ -49,9 +44,7 @@ import {
   LocalHospital,
   Badge,
   CalendarToday,
-  AccessTime,
   CheckCircle,
-  Warning,
   Info,
   QrCode,
   Download,
@@ -195,12 +188,28 @@ const Profile = () => {
     }
   }, [userProfile]);
 
+  // QR Code functions
+  const loadQRCode = useCallback(async () => {
+    if (!user) return;
+    
+    setQrCodeLoading(true);
+    try {
+      const qrCode = await getUserQRCode();
+      setQrCodeDataURL(qrCode);
+    } catch (error) {
+      console.error('Error loading QR code:', error);
+      toast.error('Failed to load QR code');
+    } finally {
+      setQrCodeLoading(false);
+    }
+  }, [user, getUserQRCode]);
+
   // Load QR code when component mounts
   useEffect(() => {
     if (user) {
       loadQRCode();
     }
-  }, [user]);
+  }, [user, loadQRCode]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -223,22 +232,6 @@ const Profile = () => {
       return;
     }
     changePasswordMutation.mutate(passwordData);
-  };
-
-  // QR Code functions
-  const loadQRCode = async () => {
-    if (!user) return;
-    
-    setQrCodeLoading(true);
-    try {
-      const qrCode = await getUserQRCode();
-      setQrCodeDataURL(qrCode);
-    } catch (error) {
-      console.error('Error loading QR code:', error);
-      toast.error('Failed to load QR code');
-    } finally {
-      setQrCodeLoading(false);
-    }
   };
 
   const handleRegenerateQRCode = async () => {

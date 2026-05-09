@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -11,7 +11,6 @@ import {
   Select,
   MenuItem,
   Grid,
-  Alert,
   CircularProgress,
   Chip,
   List,
@@ -27,7 +26,6 @@ import {
 import {
   LocalHospital,
   Schedule,
-  Person,
   AccessTime,
   CheckCircle,
 } from '@mui/icons-material';
@@ -41,7 +39,6 @@ const BookAppointment = () => {
   const [appointmentTime, setAppointmentTime] = useState('');
   const [symptoms, setSymptoms] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState([]);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [appointmentDetails, setAppointmentDetails] = useState(null);
 

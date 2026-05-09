@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -25,7 +25,6 @@ import {
   MenuItem,
   Chip,
   Avatar,
-  Alert,
   CircularProgress,
   Tabs,
   Tab,
@@ -34,27 +33,20 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  ListItemAvatar,
-  Badge,
-  Tooltip,
 } from '@mui/material';
 import {
   Search,
   FilterList,
   Download,
   Visibility,
-  Edit,
   Delete,
   Medication,
   LocalPharmacy,
   Person,
   CalendarToday,
-  AccessTime,
   CheckCircle,
   Warning,
   Info,
-  PersonAdd,
-  School,
   LocalHospital,
   Assignment,
 } from '@mui/icons-material';
@@ -64,7 +56,6 @@ import { toast } from 'react-toastify';
 
 const AdminPrescriptionManagement = () => {
   const [activeTab, setActiveTab] = useState(0);
-  const [openDialog, setOpenDialog] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -99,7 +90,7 @@ const AdminPrescriptionManagement = () => {
   );
 
   // Fetch students
-  const { data: students } = useQuery(
+  useQuery(
     'students',
     async () => {
       const response = await axios.get('/api/admin/students');

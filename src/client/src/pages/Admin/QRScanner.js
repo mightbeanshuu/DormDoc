@@ -6,7 +6,6 @@ import {
   CardContent,
   Button,
   Grid,
-  Paper,
   Alert,
   CircularProgress,
   Chip,
@@ -16,7 +15,6 @@ import {
   ListItemText,
   ListItemAvatar,
   Divider,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -26,29 +24,17 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Badge,
   Tooltip,
   Fab,
 } from '@mui/material';
 import {
   QrCodeScanner,
   Person,
-  School,
-  Phone,
-  Email,
-  LocationOn,
-  AccessTime,
   CheckCircle,
-  Warning,
   Refresh,
   Download,
   Print,
   History,
-  LocalHospital,
-  DirectionsCar,
-  Schedule,
-  MedicalServices,
-  Assignment,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';
@@ -68,7 +54,7 @@ const QRScanner = () => {
   const queryClient = useQueryClient();
 
   // Fetch students for verification
-  const { data: students, isLoading: studentsLoading } = useQuery(
+  useQuery(
     'students',
     async () => {
       const response = await axios.get('/api/admin/students');
@@ -144,18 +130,6 @@ const QRScanner = () => {
     }
   };
 
-  const handleQRCodeDetected = (data) => {
-    try {
-      const studentData = JSON.parse(data);
-      setScannedData(studentData);
-      setSelectedStudent(studentData);
-      setOpenDetails(true);
-      stopScanning();
-    } catch (error) {
-      console.error('Invalid QR code data:', error);
-      toast.error('Invalid QR code format');
-    }
-  };
 
   const handleConfirmScan = () => {
     if (selectedStudent && ambulanceId) {
