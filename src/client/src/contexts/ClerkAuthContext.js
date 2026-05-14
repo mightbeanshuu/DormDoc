@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useUser, useAuth, useClerk } from '@clerk/clerk-react';
+import { useDevBypass } from './DevBypassContext';
 
 const ClerkAuthContext = createContext();
 
@@ -15,12 +16,20 @@ export const ClerkAuthProvider = ({ children }) => {
   const { user, isLoaded: userLoaded } = useUser();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const { signOut } = useClerk();
+  const { active: bypassActive, mockUser } = useDevBypass();
   const [loading, setLoading] = useState(true);
   const [mongoUser, setMongoUser] = useState(null);
 
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
+    // Skip the API sync entirely when running with the dev bypass —
+    // there's no real Clerk session, so the sync endpoint would 401.
+    if (bypassActive) {
+      setLoading(false);
+      return;
+    }
+
     const syncUser = async () => {
       if (userLoaded && authLoaded && user) {
         try {
@@ -53,7 +62,7 @@ export const ClerkAuthProvider = ({ children }) => {
     };
     
     syncUser();
-  }, [user, userLoaded, authLoaded]);
+  }, [user, userLoaded, authLoaded, bypassActive]);
 
   const login = async (email, password) => {
     // Clerk handles login automatically
@@ -126,21 +135,26 @@ export const ClerkAuthProvider = ({ children }) => {
     return { success: true };
   };
 
+  const clerkDerivedUser = user
+    ? {
+        _id: user.id,
+        name: user.fullName,
+        email: user.primaryEmailAddress?.emailAddress,
+        role: localStorage.getItem('pendingRole') || user.publicMetadata?.role || 'student',
+        studentId: user.publicMetadata?.studentId,
+        department: user.publicMetadata?.department,
+        year: user.publicMetadata?.year,
+        phone: user.publicMetadata?.phone,
+        bloodGroup: user.publicMetadata?.bloodGroup,
+        emergencyContact: user.publicMetadata?.emergencyContact,
+        lastLogin: user.lastSignInAt,
+        loginCount: user.signInCount,
+      }
+    : null;
+
   const value = {
-    user: user ? {
-      _id: user.id,
-      name: user.fullName,
-      email: user.primaryEmailAddress?.emailAddress,
-      role: localStorage.getItem('pendingRole') || user.publicMetadata?.role || 'student',
-      studentId: user.publicMetadata?.studentId,
-      department: user.publicMetadata?.department,
-      year: user.publicMetadata?.year,
-      phone: user.publicMetadata?.phone,
-      bloodGroup: user.publicMetadata?.bloodGroup,
-      emergencyContact: user.publicMetadata?.emergencyContact,
-      lastLogin: user.lastSignInAt,
-      loginCount: user.signInCount,
-    } : null,
+    // When the dev bypass is active, surface the mock user to every consumer.
+    user: bypassActive ? mockUser : clerkDerivedUser,
     loading,
     login,
     register,
@@ -149,10 +163,10 @@ export const ClerkAuthProvider = ({ children }) => {
     changePassword,
     getUserQRCode,
     regenerateQRCode,
-    isSignedIn,
-    needsOnboarding,
+    isSignedIn: bypassActive ? true : isSignedIn,
+    needsOnboarding: bypassActive ? false : needsOnboarding,
     setNeedsOnboarding,
-    mongoUser,
+    mongoUser: bypassActive ? mockUser : mongoUser,
     setMongoUser,
   };
 

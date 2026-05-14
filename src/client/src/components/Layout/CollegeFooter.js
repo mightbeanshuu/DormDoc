@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  Box,
-  Container,
-  Grid,
-  Typography,
-  Link,
-  Divider,
-  IconButton,
-  Chip,
-} from '@mui/material';
+import { Box, Container, Grid, Typography, Stack, Divider, IconButton, Link } from '@mui/material';
 import {
   Email,
   Phone,
@@ -17,226 +8,193 @@ import {
   Twitter,
   LinkedIn,
   Instagram,
-  LocalHospital,
-  School,
   Security,
   HealthAndSafety,
 } from '@mui/icons-material';
+import { palette } from '../../theme';
+
+const ColumnHeading = ({ children }) => (
+  <Typography
+    sx={{
+      color: palette.gold,
+      letterSpacing: '0.22em',
+      textTransform: 'uppercase',
+      fontSize: '0.72rem',
+      fontWeight: 700,
+      mb: 1.5,
+    }}
+  >
+    {children}
+  </Typography>
+);
+
+const FooterLink = ({ children, href = '#' }) => (
+  <Link
+    href={href}
+    underline="none"
+    sx={{
+      color: 'rgba(255,255,255,0.78)',
+      fontSize: '0.86rem',
+      transition: 'color 200ms ease',
+      '&:hover': { color: palette.gold },
+    }}
+  >
+    {children}
+  </Link>
+);
 
 const CollegeFooter = () => {
+  const year = new Date().getFullYear();
+
   return (
     <Box
       component="footer"
       sx={{
-        bgcolor: '#1A365D',
-        color: 'white',
-        py: 6,
         mt: 'auto',
+        background: `linear-gradient(180deg, ${palette.navy.dark} 0%, #060B22 100%)`,
+        color: '#FFFFFF',
+        borderTop: `4px solid ${palette.maroon.main}`,
       }}
     >
-      <Container maxWidth="xl">
+      <Container maxWidth="xl" sx={{ py: { xs: 5, md: 6 } }}>
         <Grid container spacing={4}>
-          {/* College Information */}
+          {/* Brand column */}
           <Grid item xs={12} md={4}>
-            <Box display="flex" alignItems="center" mb={2}>
-              <School sx={{ mr: 1, color: '#fbbf24', fontSize: 30 }} />
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#fbbf24' }}>
-                BIT MESRA
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ mb: 2, color: 'rgba(255,255,255,0.8)' }}>
-              Birla Institute of Technology, Mesra is a premier engineering institute 
-              committed to excellence in education, research, and innovation.
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <Box
+                component="img"
+                src="/assets/bit_logo.png"
+                alt="BIT Mesra"
+                sx={{
+                  width: 44,
+                  height: 44,
+                  backgroundColor: '#FFFFFF',
+                  p: 0.5,
+                  borderRadius: '50%',
+                }}
+              />
+              <Box>
+                <Typography
+                  sx={{
+                    fontFamily: '"Playfair Display", serif',
+                    fontWeight: 700,
+                    fontSize: '1.05rem',
+                    lineHeight: 1.1,
+                  }}
+                >
+                  Birla Institute of Technology
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.22em',
+                    color: palette.gold,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  DormDoc · Mesra
+                </Typography>
+              </Box>
+            </Stack>
+            <Typography sx={{ color: 'rgba(255,255,255,0.74)', fontSize: '0.92rem', lineHeight: 1.7, mb: 2 }}>
+              DormDoc is the official digital dispensary platform of BIT Mesra —
+              built for students, faculty and administrators to manage campus
+              healthcare with clarity, speed and care.
             </Typography>
-            <Box display="flex" gap={1}>
-              <IconButton sx={{ color: '#fbbf24' }}>
-                <Facebook />
-              </IconButton>
-              <IconButton sx={{ color: '#fbbf24' }}>
-                <Twitter />
-              </IconButton>
-              <IconButton sx={{ color: '#fbbf24' }}>
-                <LinkedIn />
-              </IconButton>
-              <IconButton sx={{ color: '#fbbf24' }}>
-                <Instagram />
-              </IconButton>
-            </Box>
+            <Stack direction="row" spacing={0.5}>
+              {[Facebook, Twitter, LinkedIn, Instagram].map((Icon, i) => (
+                <IconButton
+                  key={i}
+                  size="small"
+                  sx={{
+                    color: 'rgba(255,255,255,0.7)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    '&:hover': { color: palette.gold, borderColor: palette.gold },
+                  }}
+                >
+                  <Icon fontSize="small" />
+                </IconButton>
+              ))}
+            </Stack>
           </Grid>
 
-          {/* Dispensary Information */}
-          <Grid item xs={12} md={4}>
-            <Box display="flex" alignItems="center" mb={2}>
-              <LocalHospital sx={{ mr: 1, color: '#fbbf24', fontSize: 30 }} />
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#fbbf24' }}>
-                COLLEGE DISPENSARY
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ mb: 2, color: 'rgba(255,255,255,0.8)' }}>
-              Providing comprehensive medical services to the BIT Mesra community 
-              with modern facilities and experienced healthcare professionals.
-            </Typography>
-            <Box display="flex" flexWrap="wrap" gap={1}>
-              <Chip
-                label="24/7 Emergency"
-                size="small"
-                sx={{ bgcolor: '#ef4444', color: 'white' }}
-              />
-              <Chip
-                label="Appointment Booking"
-                size="small"
-                sx={{ bgcolor: '#10b981', color: 'white' }}
-              />
-              <Chip
-                label="Online Consultation"
-                size="small"
-                sx={{ bgcolor: '#3b82f6', color: 'white' }}
-              />
-            </Box>
+          {/* Quick links */}
+          <Grid item xs={6} md={2}>
+            <ColumnHeading>Quick Links</ColumnHeading>
+            <Stack spacing={0.9}>
+              <FooterLink>Book Appointment</FooterLink>
+              <FooterLink>Emergency SOS</FooterLink>
+              <FooterLink>Prescriptions</FooterLink>
+              <FooterLink>Health Records</FooterLink>
+            </Stack>
           </Grid>
 
-          {/* Contact Information */}
+          {/* Services */}
+          <Grid item xs={6} md={2}>
+            <ColumnHeading>Services</ColumnHeading>
+            <Stack spacing={0.9}>
+              <FooterLink>General Consultation</FooterLink>
+              <FooterLink>Ambulance Dispatch</FooterLink>
+              <FooterLink>Health Checkups</FooterLink>
+              <FooterLink>Medical Leave</FooterLink>
+            </Stack>
+          </Grid>
+
+          {/* Contact */}
           <Grid item xs={12} md={4}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#fbbf24', mb: 2 }}>
-              Contact Information
-            </Typography>
-            <Box mb={2}>
-              <Box display="flex" alignItems="center" mb={1}>
-                <LocationOn sx={{ mr: 1, color: '#fbbf24', fontSize: 20 }} />
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                  Birla Institute of Technology, Mesra<br />
-                  Ranchi, Jharkhand - 835215
+            <ColumnHeading>Reach the dispensary</ColumnHeading>
+            <Stack spacing={1.2}>
+              <Stack direction="row" spacing={1.2} alignItems="flex-start">
+                <LocationOn sx={{ color: palette.gold, fontSize: 18, mt: '2px' }} />
+                <Typography sx={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.86rem', lineHeight: 1.6 }}>
+                  Birla Institute of Technology, Mesra
+                  <br />
+                  Ranchi, Jharkhand — 835215
                 </Typography>
-              </Box>
-              <Box display="flex" alignItems="center" mb={1}>
-                <Phone sx={{ mr: 1, color: '#fbbf24', fontSize: 20 }} />
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                  +91-651-2275444 (Main)<br />
-                  +91-651-2275445 (Dispensary)
+              </Stack>
+              <Stack direction="row" spacing={1.2} alignItems="center">
+                <Phone sx={{ color: palette.gold, fontSize: 18 }} />
+                <Typography sx={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.86rem' }}>
+                  +91-651-2275444 · Dispensary +91-651-2275445
                 </Typography>
-              </Box>
-              <Box display="flex" alignItems="center" mb={1}>
-                <Email sx={{ mr: 1, color: '#fbbf24', fontSize: 20 }} />
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                  dispensary@bitmesra.ac.in<br />
-                  medical@bitmesra.ac.in
+              </Stack>
+              <Stack direction="row" spacing={1.2} alignItems="center">
+                <Email sx={{ color: palette.gold, fontSize: 18 }} />
+                <Typography sx={{ color: 'rgba(255,255,255,0.82)', fontSize: '0.86rem' }}>
+                  dispensary@bitmesra.ac.in
                 </Typography>
-              </Box>
-            </Box>
+              </Stack>
+            </Stack>
           </Grid>
         </Grid>
 
-        <Divider sx={{ my: 3, bgcolor: 'rgba(255,255,255,0.2)' }} />
+        <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.08)' }} />
 
-        {/* Quick Links */}
-        <Grid container spacing={4} mb={3}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fbbf24', mb: 1 }}>
-              Quick Links
-            </Typography>
-            <Box display="flex" flexDirection="column" gap={0.5}>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Book Appointment
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Emergency SOS
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                My Prescriptions
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Health Records
-              </Link>
-            </Box>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fbbf24', mb: 1 }}>
-              Services
-            </Typography>
-            <Box display="flex" flexDirection="column" gap={0.5}>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                General Consultation
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Emergency Care
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Prescription Management
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Health Checkups
-              </Link>
-            </Box>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fbbf24', mb: 1 }}>
-              Resources
-            </Typography>
-            <Box display="flex" flexDirection="column" gap={0.5}>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Health Guidelines
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Emergency Procedures
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Medical Policies
-              </Link>
-              <Link href="#" color="inherit" sx={{ textDecoration: 'none', fontSize: '0.9rem' }}>
-                Contact Directory
-              </Link>
-            </Box>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fbbf24', mb: 1 }}>
-              Emergency
-            </Typography>
-            <Box display="flex" flexDirection="column" gap={0.5}>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>
-                🚨 Emergency: 100
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>
-                🏥 Ambulance: 108
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>
-                🆘 Campus Security: 101
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>
-                📞 Dispensary: 102
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
-
-        <Divider sx={{ my: 2, bgcolor: 'rgba(255,255,255,0.2)' }} />
-
-        {/* Bottom Section */}
-        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap">
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            © 2024 Birla Institute of Technology, Mesra. All rights reserved.
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          spacing={2}
+        >
+          <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.78rem', letterSpacing: '0.05em' }}>
+            © {year} Birla Institute of Technology, Mesra. All rights reserved.
           </Typography>
-          <Box display="flex" alignItems="center" gap={2}>
-            <Security sx={{ fontSize: 16, color: '#fbbf24' }} />
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              Secure & Confidential
-            </Typography>
-            <HealthAndSafety sx={{ fontSize: 16, color: '#fbbf24' }} />
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              HIPAA Compliant
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Additional Information */}
-        <Box mt={2} p={2} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }}>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', textAlign: 'center' }}>
-            <strong>BIT Mesra College Dispensary</strong> - Committed to providing quality healthcare services 
-            to our students, faculty, and staff. Your health and well-being are our top priority.
-          </Typography>
-        </Box>
+          <Stack direction="row" spacing={2.5} alignItems="center">
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Security sx={{ fontSize: 15, color: palette.gold }} />
+              <Typography sx={{ color: 'rgba(255,255,255,0.62)', fontSize: '0.76rem' }}>
+                Secure & Confidential
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <HealthAndSafety sx={{ fontSize: 15, color: palette.gold }} />
+              <Typography sx={{ color: 'rgba(255,255,255,0.62)', fontSize: '0.76rem' }}>
+                Privacy-first care
+              </Typography>
+            </Stack>
+          </Stack>
+        </Stack>
       </Container>
     </Box>
   );

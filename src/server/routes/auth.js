@@ -17,51 +17,57 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Email transporter (lazily built so the server doesn't crash if EMAIL_USER is missing).
+const emailIsConfigured = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+const transporter = emailIsConfigured
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    })
+  : null;
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Generate OTP
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Send OTP via email
+// Send OTP via email — falls back to console log when email is unconfigured (dev mode).
 const sendOTPEmail = async (email, otp) => {
+  if (!transporter) {
+    if (isProduction) {
+      throw new Error('Email is not configured on the server');
+    }
+    // Dev fallback so the OTP feature is usable without a Gmail app password.
+    console.log(`\n[DEV OTP] To: ${email}\n[DEV OTP] Code: ${otp}\n[DEV OTP] Valid for 10 minutes\n`);
+    return { mocked: true };
+  }
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
-    subject: 'Password Reset OTP - College Dispensary',
+    subject: 'Password Reset OTP — DormDoc',
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1976d2;">Password Reset Request</h2>
-        <p>You have requested to reset your password for the College Dispensary Management System.</p>
+      <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #7B1E1E;">Password Reset Request</h2>
+        <p>You have requested to reset your password for DormDoc · BIT Mesra.</p>
         <p>Your OTP (One-Time Password) is:</p>
-        <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0;">
-          <h1 style="color: #1976d2; font-size: 32px; margin: 0;">${otp}</h1>
+        <div style="background-color: #FAF7F2; padding: 22px; text-align: center; margin: 22px 0; border: 1px solid rgba(15,24,64,0.08); border-radius: 12px;">
+          <h1 style="color: #7B1E1E; font-size: 32px; margin: 0; letter-spacing: 0.18em;">${otp}</h1>
         </div>
-        <p>This OTP is valid for 10 minutes. If you didn't request this password reset, please ignore this email.</p>
+        <p>This OTP is valid for 10 minutes. If you didn't request this reset, please ignore this email.</p>
         <p>For security reasons, do not share this OTP with anyone.</p>
-        <hr style="margin: 20px 0;">
-        <p style="color: #666; font-size: 12px;">
-          This is an automated message from the College Dispensary Management System.
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid rgba(15,24,64,0.1);">
+        <p style="color: #5A5A5A; font-size: 12px;">
+          Automated message from DormDoc — Campus dispensary management for BIT Mesra.
         </p>
       </div>
     `,
   };
 
-  try {
-    await transporter.sendMail(mailOptions);
-    return true;
-  } catch (error) {
-    console.error('Error sending email:', error);
-    throw error;
-  }
+  await transporter.sendMail(mailOptions);
+  return { mocked: false };
 };
 
 // Register user
@@ -243,42 +249,55 @@ router.post('/login', authLimiter, async (req, res) => {
 router.post('/send-otp', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
 
-    // Check if user exists
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: 'User not found with this email' });
     }
 
-    // Generate OTP
     const otpCode = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const ipAddress = req.ip || req.connection?.remoteAddress || 'unknown';
+    const userAgent = req.get('User-Agent') || 'unknown';
 
-    // Save OTP to database
-    await OTP.findOneAndUpdate(
-      { email },
-      { email, otp: otpCode, expiresAt, used: false },
-      { upsert: true, new: true }
-    );
+    // Replace any stale OTP for this email — the OTP model requires
+    // ipAddress + userAgent, which the previous upsert was omitting.
+    await OTP.deleteMany({ email });
+    await OTP.create({
+      email,
+      otp: otpCode,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      used: false,
+      ipAddress,
+      userAgent,
+    });
 
-    // Send OTP via email
-    await sendOTPEmail(email, otpCode);
+    const sendResult = await sendOTPEmail(email, otpCode);
 
-    // Log OTP request
-    const loginLog = new LoginLog({
+    await new LoginLog({
       userId: user._id,
       email: user.email,
       action: 'otp_request',
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
+      ipAddress,
+      userAgent,
       status: 'success',
-    });
-    await loginLog.save();
+    }).save();
 
-    res.json({ message: 'OTP sent successfully' });
+    const response = { message: 'OTP sent successfully', emailDelivered: !sendResult.mocked };
+
+    // In dev mode without email configured, echo the OTP back so the
+    // password-reset flow can be tested without an SMTP setup.
+    if (sendResult.mocked && !isProduction) {
+      response.devOtp = otpCode;
+      response.message = 'OTP generated (dev mode — email transport not configured). See server console.';
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Send OTP error:', error);
-    res.status(500).json({ message: 'Failed to send OTP' });
+    res.status(500).json({ message: 'Failed to send OTP', detail: error.message });
   }
 });
 
