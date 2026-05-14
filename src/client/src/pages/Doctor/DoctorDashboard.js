@@ -53,9 +53,16 @@ import {
   PlayArrow,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { motion } from 'framer-motion';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
+import { palette } from '../../theme';
+import {
+  WelcomeBanner,
+  StatTile,
+  sectionFade,
+} from '../../components/Dashboard/Primitives';
 
 const DoctorDashboard = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -257,100 +264,34 @@ const DoctorDashboard = () => {
 
   const dashboardStats = getDashboardStats();
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Doctor Dashboard
-      </Typography>
-      <Typography variant="body1" color="text.secondary" mb={3}>
-        Welcome, Dr. {user?.name}. Manage your patients, prescriptions, and appointments.
-      </Typography>
+  const firstName = (user?.name || '').split(' ')[0] || 'Doctor';
 
-      {/* Statistics Cards */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="h4" color="primary">
-                    {dashboardStats.totalAppointments}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Today's Appointments
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
-                  <CalendarToday />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="h4" color="success.main">
-                    {dashboardStats.completedAppointments}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Completed
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'success.main' }}>
-                  <CheckCircle />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="h4" color="warning.main">
-                    {dashboardStats.pendingAppointments}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Pending
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'warning.main' }}>
-                  <Schedule />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="h4" color="info.main">
-                    {dashboardStats.totalPrescriptions}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Prescriptions
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'info.main' }}>
-                  <Medication />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+  return (
+    <Box sx={{ pb: 4 }}>
+      <WelcomeBanner
+        overline="Medical faculty"
+        title={`Hello, Dr. ${firstName}`}
+        highlight="ready when you are"
+        subtitle="Your patient list, prescriptions and ambulance dispatch — all in one place. Open a tab below to begin."
+      />
+
+      <Grid container spacing={2.5} sx={{ mt: 0.5, mb: 0.5 }}>
+        {[
+          { icon: CalendarToday, label: "Today's appointments", value: dashboardStats.totalAppointments, accent: palette.maroon.main },
+          { icon: CheckCircle, label: 'Completed', value: dashboardStats.completedAppointments, accent: '#2F7D5A' },
+          { icon: Schedule, label: 'Pending', value: dashboardStats.pendingAppointments, accent: palette.gold },
+          { icon: Medication, label: 'Prescriptions issued', value: dashboardStats.totalPrescriptions, accent: palette.navy.main },
+        ].map((s, i) => (
+          <Grid item xs={6} md={3} key={s.label}>
+            <motion.div initial="hidden" animate="visible" variants={sectionFade} custom={i + 1}>
+              <StatTile {...s} />
+            </motion.div>
+          </Grid>
+        ))}
       </Grid>
 
       {/* Tabs */}
-      <Card>
+      <Card sx={{ mt: 3 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
             <Tab label="Today's Appointments" icon={<CalendarToday />} />

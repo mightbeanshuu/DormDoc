@@ -1,151 +1,202 @@
 import React from 'react';
 import {
-  Box, Typography, Grid, Paper, Divider, Avatar,
-  Alert, Skeleton, Chip, Table, TableBody,
-  TableCell, TableHead, TableRow,
+  Box,
+  Grid,
+  Typography,
+  Skeleton,
+  Chip,
+  Stack,
+  Alert,
+  Divider,
 } from '@mui/material';
 import {
-  AccountBalance, Assignment, PendingActions, TrendingUp,
-  LocalHospital, Warning,
+  PendingActions,
+  Assignment,
+  LocalHospital,
+  Warning,
+  TrendingUp,
 } from '@mui/icons-material';
 import { useQuery } from 'react-query';
+import { motion } from 'framer-motion';
 import { useClerkAuth } from '../../contexts/ClerkAuthContext';
-import DeptStatCard from '../../components/HOD/DeptStatCard';
 import { fetchDashboardStats } from '../../services/hodService';
+import { palette } from '../../theme';
+import {
+  WelcomeBanner,
+  StatTile,
+  SectionCard,
+  PersonRow,
+  EmptyState,
+  sectionFade,
+} from '../../components/Dashboard/Primitives';
 
-const STATUS_CHIP = {
-  pending:  <Chip label="Pending"  color="warning" size="small" />,
-  approved: <Chip label="Approved" color="success" size="small" />,
-  rejected: <Chip label="Rejected" color="error"   size="small" />,
+const statusChipFor = (status) => {
+  const map = {
+    pending: { color: '#B8862B', label: 'Pending' },
+    approved: { color: '#2F7D5A', label: 'Approved' },
+    rejected: { color: '#B0322B', label: 'Rejected' },
+  };
+  const s = map[status] || { color: palette.navy.light, label: status };
+  return (
+    <Chip
+      label={s.label}
+      size="small"
+      sx={{
+        height: 22,
+        backgroundColor: `${s.color}1f`,
+        color: s.color,
+        fontWeight: 700,
+      }}
+    />
+  );
 };
 
 const HodDashboard = () => {
   const { user } = useClerkAuth();
-
-  const { data, isLoading, isError } = useQuery(
-    'hod-dashboard',
-    fetchDashboardStats,
-    { staleTime: 2 * 60 * 1000 }
-  );
+  const { data, isLoading, isError } = useQuery('hod-dashboard', fetchDashboardStats, {
+    staleTime: 2 * 60 * 1000,
+  });
 
   const stats = [
-    { label: 'Pending Leave Requests',      key: 'pendingLeaves',     color: '#3b82f6', icon: <PendingActions /> },
-    { label: 'Approved Leaves (This Month)', key: 'approvedThisMonth', color: '#10b981', icon: <Assignment /> },
-    { label: 'Active Medical Cases',         key: 'activeCases',       color: '#f59e0b', icon: <LocalHospital /> },
-    { label: 'Emergency Cases',              key: 'emergencyCases',    color: '#ef4444', icon: <Warning /> },
+    { icon: PendingActions, label: 'Pending leaves', value: data?.pendingLeaves ?? 0, accent: palette.maroon.main },
+    { icon: Assignment, label: 'Approved this month', value: data?.approvedThisMonth ?? 0, accent: '#2F7D5A' },
+    { icon: LocalHospital, label: 'Active medical cases', value: data?.activeCases ?? 0, accent: palette.gold },
+    { icon: Warning, label: 'Emergency cases', value: data?.emergencyCases ?? 0, accent: '#B0322B' },
   ];
 
-  return (
-    <Box sx={{ flexGrow: 1 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center' }}>
-        <Avatar sx={{ bgcolor: '#f59e0b', width: 56, height: 56, mr: 2 }}>
-          <AccountBalance fontSize="large" />
-        </Avatar>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" color="#1A365D">
-            HOD Overview
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {user?.department || 'Department'} · Medical & Leave Summary
-          </Typography>
-        </Box>
+  if (isLoading) {
+    return (
+      <Box sx={{ pb: 4 }}>
+        <Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />
+        <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <Grid item xs={6} md={3} key={i}>
+              <Skeleton variant="rounded" height={140} sx={{ borderRadius: 3 }} />
+            </Grid>
+          ))}
+        </Grid>
       </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ pb: 4 }}>
+      <WelcomeBanner
+        overline={user?.department ? `Department · ${user.department}` : 'Department overview'}
+        title="HOD"
+        highlight="overview"
+        subtitle="A digest of leaves, medical activity and student well-being in your department — everything you need to act decisively today."
+      />
 
       {isError && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mt: 2 }}>
           Failed to load dashboard data. Please refresh the page.
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        {/* Stat cards */}
-        {stats.map(({ label, key, color }) => (
-          <Grid item xs={12} sm={6} md={3} key={key}>
-            <DeptStatCard
-              label={label}
-              value={data?.[key]}
-              color={color}
-              loading={isLoading}
-            />
+      <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+        {stats.map((s, i) => (
+          <Grid item xs={6} md={3} key={s.label}>
+            <motion.div initial="hidden" animate="visible" variants={sectionFade} custom={i + 1}>
+              <StatTile {...s} />
+            </motion.div>
           </Grid>
         ))}
+      </Grid>
 
-        {/* Recent leave requests */}
+      <Grid container spacing={3} sx={{ mt: 0.5 }}>
         <Grid item xs={12} md={8}>
-          <Paper elevation={3} sx={{ p: 3, borderRadius: 3 }}>
-            <Typography
-              variant="h6" fontWeight="bold" color="#1A365D" mb={2}
-              display="flex" alignItems="center"
+          <motion.div initial="hidden" animate="visible" variants={sectionFade} custom={4}>
+            <SectionCard
+              overline="Department"
+              title="Recent leave applications"
+              action={
+                <Chip
+                  label={`${data?.recentLeaveActivity?.length || 0} shown`}
+                  size="small"
+                  sx={{
+                    backgroundColor: `${palette.navy.main}12`,
+                    color: palette.navy.dark,
+                    fontWeight: 700,
+                  }}
+                />
+              }
             >
-              <PendingActions sx={{ mr: 1 }} /> Recent Leave Applications
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} variant="rectangular" height={44} sx={{ mb: 1, borderRadius: 1 }} />
-              ))
-            ) : !data?.recentLeaveActivity?.length ? (
-              <Box textAlign="center" py={4}>
-                <Assignment sx={{ fontSize: 48, color: '#cbd5e1', mb: 1 }} />
-                <Typography color="text.secondary">No leave requests yet.</Typography>
-              </Box>
-            ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell><b>Student</b></TableCell>
-                    <TableCell><b>Year</b></TableCell>
-                    <TableCell><b>Duration</b></TableCell>
-                    <TableCell><b>Status</b></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+              {!data?.recentLeaveActivity?.length ? (
+                <EmptyState icon={Assignment} title="No leave requests yet" hint="New applications will appear here." />
+              ) : (
+                <Stack divider={<Divider flexItem />}>
                   {data.recentLeaveActivity.map((item) => (
-                    <TableRow key={item._id} hover>
-                      <TableCell>{item.studentName}</TableCell>
-                      <TableCell>{item.year || '—'}</TableCell>
-                      <TableCell>{item.duration ? `${item.duration}d` : '—'}</TableCell>
-                      <TableCell>{STATUS_CHIP[item.status] || item.status}</TableCell>
-                    </TableRow>
+                    <PersonRow
+                      key={item._id}
+                      avatarColor={palette.navy.main}
+                      name={item.studentName}
+                      sub={`Year ${item.year || '—'} · ${item.duration ? `${item.duration} day${item.duration > 1 ? 's' : ''}` : 'Duration N/A'}`}
+                      right={statusChipFor(item.status)}
+                    />
                   ))}
-                </TableBody>
-              </Table>
-            )}
-          </Paper>
+                </Stack>
+              )}
+            </SectionCard>
+          </motion.div>
         </Grid>
 
-        {/* Top symptoms + health metrics */}
         <Grid item xs={12} md={4}>
-          <Paper elevation={3} sx={{ p: 3, borderRadius: 3 }}>
-            <Typography
-              variant="h6" fontWeight="bold" color="#1A365D" mb={2}
-              display="flex" alignItems="center"
-            >
-              <TrendingUp sx={{ mr: 1 }} /> Top Symptoms (90 days)
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} variant="text" height={28} sx={{ mb: 0.5 }} />
-              ))
-            ) : !data?.topSymptoms?.length ? (
-              <Typography color="text.secondary" variant="body2">
-                No symptom data yet.
-              </Typography>
-            ) : (
-              data.topSymptoms.map((s, i) => (
-                <Box key={i} display="flex" justifyContent="space-between" mb={1}>
-                  <Typography variant="body2" noWrap sx={{ maxWidth: '75%' }}>
-                    {s.symptom}
-                  </Typography>
-                  <Chip label={s.count} size="small" sx={{ bgcolor: '#e0e7ff', color: '#1e3a8a', fontWeight: 700 }} />
-                </Box>
-              ))
-            )}
-          </Paper>
+          <motion.div initial="hidden" animate="visible" variants={sectionFade} custom={5}>
+            <SectionCard overline="90 days" title="Top reported symptoms">
+              {!data?.topSymptoms?.length ? (
+                <EmptyState icon={TrendingUp} title="No symptom data" hint="As cases are logged, trends appear here." />
+              ) : (
+                <Stack spacing={1.25}>
+                  {data.topSymptoms.map((s, i) => {
+                    const max = Math.max(...data.topSymptoms.map((x) => x.count));
+                    const pct = Math.round((s.count / max) * 100);
+                    return (
+                      <Box key={i}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ color: palette.navy.dark, fontWeight: 600 }}
+                            noWrap
+                          >
+                            {s.symptom}
+                          </Typography>
+                          <Chip
+                            label={s.count}
+                            size="small"
+                            sx={{
+                              height: 20,
+                              backgroundColor: `${palette.gold}1f`,
+                              color: '#7A5C00',
+                              fontWeight: 700,
+                            }}
+                          />
+                        </Stack>
+                        <Box
+                          sx={{
+                            height: 6,
+                            borderRadius: 3,
+                            backgroundColor: 'rgba(15,24,64,0.06)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              height: '100%',
+                              width: `${pct}%`,
+                              background: `linear-gradient(90deg, ${palette.maroon.main}, ${palette.gold})`,
+                              borderRadius: 3,
+                              transition: 'width 600ms ease',
+                            }}
+                          />
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </SectionCard>
+          </motion.div>
         </Grid>
       </Grid>
     </Box>

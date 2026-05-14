@@ -17,7 +17,8 @@ import {
   MenuItem,
   Divider,
   Badge,
-  Paper,
+  Stack,
+  Tooltip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -40,31 +41,30 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useClerkAuth } from '../../contexts/ClerkAuthContext';
+import { palette } from '../../theme';
 import CollegeHeader from './CollegeHeader';
 import CollegeFooter from './CollegeFooter';
 
-const drawerWidth = 240;
+const drawerWidth = 256;
+
+const ROLE_LABEL = {
+  student: 'Student Portal',
+  doctor: 'Medical Faculty Portal',
+  hod: 'HOD Portal',
+  parent: 'Parent Portal',
+  admin: 'Administrator Portal',
+};
 
 const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
-  const [hideTimeout, setHideTimeout] = useState(null);
   const { user, logout } = useClerkAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const handleProfileMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleProfileMenuClose = () => {
-    setAnchorEl(null);
-  };
+  const handleDrawerToggle = () => setMobileOpen((open) => !open);
+  const handleProfileMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleProfileMenuClose = () => setAnchorEl(null);
 
   const handleLogout = () => {
     logout();
@@ -77,288 +77,373 @@ const Layout = ({ children }) => {
     setMobileOpen(false);
   };
 
-  const handleSidebarEnter = () => {
-    if (hideTimeout) {
-      clearTimeout(hideTimeout);
-      setHideTimeout(null);
-    }
-    setSidebarHovered(true);
-  };
-
-  const handleSidebarLeave = () => {
-    const timeout = setTimeout(() => {
-      setSidebarHovered(false);
-    }, 300);
-    setHideTimeout(timeout);
-  };
-
   const getMenuItems = () => {
-        if (user?.role === 'student') {
-          return [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-            { text: 'Book Appointment', icon: <LocalHospital />, path: '/book-appointment' },
-            { text: 'My Appointments', icon: <Queue />, path: '/appointments' },
-            { text: 'Emergency SOS', icon: <Warning />, path: '/emergency-sos' },
-            { text: 'Ambulance Booking', icon: <DirectionsCar />, path: '/ambulance-booking' },
-            { text: 'Prescriptions', icon: <Medication />, path: '/prescriptions' },
-            { text: 'Leave Application', icon: <Assignment />, path: '/leave-application' },
-            { text: 'AI Chatbot', icon: <Chat />, path: '/chatbot' },
-            { text: 'Profile', icon: <Person />, path: '/profile' },
-          ];
-        } else if (user?.role === 'doctor') {
-          return [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-            { text: 'Today\'s Appointments', icon: <LocalHospital />, path: '/doctor-dashboard' },
-            { text: 'Patient Chat', icon: <Chat />, path: '/patient-chat' },
-            { text: 'Profile', icon: <Person />, path: '/profile' },
-          ];
-        } else if (user?.role === 'hod') {
-          return [
-            { text: 'Dashboard',            icon: <Dashboard />,  path: '/dashboard' },
-            { text: 'Leave Approvals',       icon: <Assignment />, path: '/hod/leave-approvals' },
-            { text: 'Department Analytics',  icon: <Analytics />,  path: '/hod/analytics' },
-            { text: 'Department Students',   icon: <Person />,     path: '/hod/students' },
-            { text: 'Active Cases',          icon: <LocalHospital />, path: '/hod/active-cases' },
-            { text: 'Reports',               icon: <Assignment />, path: '/hod/reports' },
-            { text: 'Profile',               icon: <Person />,     path: '/profile' },
-          ];
-        } else if (user?.role === 'parent') {
-          return [
-            { text: 'Ward Overview', icon: <Dashboard />, path: '/dashboard' },
-            { text: 'Medical Records', icon: <Medication />, path: '/prescriptions' },
-            { text: 'AI Support', icon: <Chat />, path: '/chatbot' },
-            { text: 'Profile', icon: <Person />, path: '/profile' },
-          ];
-        } else if (user?.role === 'admin') {
-          return [
-            { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-            { text: 'Doctors', icon: <LocalHospital />, path: '/doctors' },
-            { text: 'Ambulances', icon: <DirectionsCar />, path: '/ambulances' },
-            { text: 'Queue Management', icon: <Queue />, path: '/queue' },
-            { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
-            { text: 'Prescriptions', icon: <Medication />, path: '/admin-prescriptions' },
-            { text: 'Inventory', icon: <Assignment />, path: '/inventory' },
-            { text: 'Ambulance Tracking', icon: <DirectionsCar />, path: '/ambulance-tracking' },
-            { text: 'Leave Requests', icon: <Assignment />, path: '/leave-requests' },
-            { text: 'QR Scanner', icon: <QrCodeScanner />, path: '/qr-scanner' },
-            { text: 'Login Info', icon: <Security />, path: '/login-info' },
-            { text: 'Profile', icon: <Person />, path: '/profile' },
-          ];
-        } else {
-          return [];
-        }
-      };
+    if (user?.role === 'student') {
+      return [
+        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
+        { text: 'Book Appointment', icon: <LocalHospital />, path: '/book-appointment' },
+        { text: 'My Appointments', icon: <Queue />, path: '/appointments' },
+        { text: 'Emergency SOS', icon: <Warning />, path: '/emergency-sos' },
+        { text: 'Ambulance Booking', icon: <DirectionsCar />, path: '/ambulance-booking' },
+        { text: 'Prescriptions', icon: <Medication />, path: '/prescriptions' },
+        { text: 'Leave Application', icon: <Assignment />, path: '/leave-application' },
+        { text: 'AI Chatbot', icon: <Chat />, path: '/chatbot' },
+        { text: 'Profile', icon: <Person />, path: '/profile' },
+      ];
+    } else if (user?.role === 'doctor') {
+      return [
+        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
+        { text: "Today's Appointments", icon: <LocalHospital />, path: '/doctor-dashboard' },
+        { text: 'Patient Chat', icon: <Chat />, path: '/patient-chat' },
+        { text: 'Profile', icon: <Person />, path: '/profile' },
+      ];
+    } else if (user?.role === 'hod') {
+      return [
+        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
+        { text: 'Leave Approvals', icon: <Assignment />, path: '/hod/leave-approvals' },
+        { text: 'Department Analytics', icon: <Analytics />, path: '/hod/analytics' },
+        { text: 'Department Students', icon: <Person />, path: '/hod/students' },
+        { text: 'Active Cases', icon: <LocalHospital />, path: '/hod/active-cases' },
+        { text: 'Reports', icon: <Assignment />, path: '/hod/reports' },
+        { text: 'Profile', icon: <Person />, path: '/profile' },
+      ];
+    } else if (user?.role === 'parent') {
+      return [
+        { text: 'Ward Overview', icon: <Dashboard />, path: '/dashboard' },
+        { text: 'Medical Records', icon: <Medication />, path: '/prescriptions' },
+        { text: 'AI Support', icon: <Chat />, path: '/chatbot' },
+        { text: 'Profile', icon: <Person />, path: '/profile' },
+      ];
+    } else if (user?.role === 'admin') {
+      return [
+        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
+        { text: 'Doctors', icon: <LocalHospital />, path: '/doctors' },
+        { text: 'Ambulances', icon: <DirectionsCar />, path: '/ambulances' },
+        { text: 'Queue Management', icon: <Queue />, path: '/queue' },
+        { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
+        { text: 'Prescriptions', icon: <Medication />, path: '/admin-prescriptions' },
+        { text: 'Inventory', icon: <Assignment />, path: '/inventory' },
+        { text: 'Ambulance Tracking', icon: <DirectionsCar />, path: '/ambulance-tracking' },
+        { text: 'Leave Requests', icon: <Assignment />, path: '/leave-requests' },
+        { text: 'QR Scanner', icon: <QrCodeScanner />, path: '/qr-scanner' },
+        { text: 'Login Info', icon: <Security />, path: '/login-info' },
+        { text: 'Profile', icon: <Person />, path: '/profile' },
+      ];
+    }
+    return [];
+  };
 
-  const drawer = (
-    <div>
-      <Toolbar sx={{ bgcolor: '#1e3a8a', color: 'white' }}>
-        <Box display="flex" alignItems="center" width="100%">
-          <Avatar sx={{ bgcolor: 'white', color: '#1e3a8a', mr: 1, width: 32, height: 32 }}>
-            <LocalHospital />
-          </Avatar>
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
-              BIT MESRA
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#fbbf24', fontSize: '0.7rem' }}>
-              DISPENSARY
-            </Typography>
-          </Box>
-        </Box>
-      </Toolbar>
-      <Divider />
-      <List>
-        {getMenuItems().map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              selected={location.pathname === item.path}
-              onClick={() => handleNavigation(item.path)}
-              sx={{
-                '&.Mui-selected': {
-                  bgcolor: '#1e3a8a',
-                  color: 'white',
-                  '& .MuiListItemIcon-root': {
-                    color: '#fbbf24',
+  const sidebarBrand = (
+    <Box
+      sx={{
+        px: 2.5,
+        py: 2.25,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        background: `linear-gradient(135deg, ${palette.navy.dark} 0%, ${palette.maroon.dark} 100%)`,
+        color: '#FFFFFF',
+      }}
+    >
+      <Avatar
+        src="/assets/bit_logo.png"
+        sx={{
+          width: 38,
+          height: 38,
+          bgcolor: '#FFFFFF',
+          p: 0.5,
+          border: `1.5px solid ${palette.gold}`,
+        }}
+      />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          sx={{
+            fontFamily: '"Playfair Display", serif',
+            fontWeight: 700,
+            fontSize: '1rem',
+            lineHeight: 1.1,
+          }}
+        >
+          DormDoc
+        </Typography>
+        <Typography
+          sx={{
+            color: palette.gold,
+            fontSize: '0.62rem',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            fontWeight: 600,
+            mt: 0.3,
+          }}
+        >
+          {ROLE_LABEL[user?.role] || 'Portal'}
+        </Typography>
+      </Box>
+    </Box>
+  );
+
+  const drawerContent = (
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: palette.navy.dark,
+        color: 'rgba(255,255,255,0.92)',
+      }}
+    >
+      {sidebarBrand}
+      <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+      <List sx={{ flex: 1, py: 1.5 }}>
+        {getMenuItems().map((item) => {
+          const active = location.pathname === item.path;
+          return (
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton
+                selected={active}
+                onClick={() => handleNavigation(item.path)}
+                sx={{
+                  '&.Mui-selected': {
+                    backgroundColor: 'rgba(212, 162, 76, 0.16)',
+                    color: '#FFFFFF',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      left: 0,
+                      top: 6,
+                      bottom: 6,
+                      width: 3,
+                      borderRadius: 4,
+                      backgroundColor: palette.gold,
+                    },
+                    '& .MuiListItemIcon-root': { color: palette.gold },
                   },
-                },
-                '&:hover': {
-                  bgcolor: '#f1f5f9',
-                },
-              }}
-            >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    color: active ? palette.gold : 'rgba(255,255,255,0.7)',
+                    minWidth: 36,
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.text}
+                  primaryTypographyProps={{
+                    fontSize: '0.92rem',
+                    fontWeight: active ? 600 : 500,
+                    letterSpacing: 0.1,
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
-    </div>
+      <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+      <Box sx={{ px: 2.5, py: 1.75 }}>
+        <Typography
+          sx={{
+            color: 'rgba(255,255,255,0.45)',
+            fontSize: '0.66rem',
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+          }}
+        >
+          v1.0 · BIT Mesra
+        </Typography>
+      </Box>
+    </Box>
   );
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: palette.cream.default }}>
       <CssBaseline />
-      
-      {/* College Header */}
-      <CollegeHeader />
-      
-          <Box sx={{ display: 'flex', flexGrow: 1 }}>
-            {/* Hover Trigger Area */}
-            <Box
-              sx={{
-                position: 'fixed',
-                left: 0,
-                top: 0,
-                width: '20px',
-                height: '100vh',
-                zIndex: 1300,
-                cursor: 'pointer',
-                '&:hover': {
-                  width: '20px',
-                }
-              }}
-              onMouseEnter={handleSidebarEnter}
-            />
-            
-            {/* Navigation Drawer */}
-            <Box
-              component="nav"
-              sx={{ 
-                width: { sm: sidebarHovered ? drawerWidth : 0 }, 
-                flexShrink: { sm: 0 },
-                transition: 'width 0.3s ease-in-out',
-                position: 'relative',
-                zIndex: 1200
-              }}
-              aria-label="mailbox folders"
-            >
-              <Drawer
-                variant="temporary"
-                open={mobileOpen}
-                onClose={handleDrawerToggle}
-                ModalProps={{
-                  keepMounted: true,
-                }}
-                sx={{
-                  display: { xs: 'block', sm: 'none' },
-                  '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-                }}
-              >
-                {drawer}
-              </Drawer>
-              <Drawer
-                variant="permanent"
-                sx={{
-                  display: { xs: 'none', sm: 'block' },
-                  '& .MuiDrawer-paper': { 
-                    boxSizing: 'border-box', 
-                    width: sidebarHovered ? drawerWidth : 0,
-                    overflow: 'hidden',
-                    transition: 'width 0.3s ease-in-out',
-                    border: 'none',
-                    boxShadow: sidebarHovered ? 3 : 0
-                  },
-                }}
-                open={sidebarHovered}
-              >
-                <Paper
-                  onMouseEnter={handleSidebarEnter}
-                  onMouseLeave={handleSidebarLeave}
-                  sx={{
-                    height: '100%',
-                    width: drawerWidth,
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    zIndex: 1,
-                    bgcolor: 'white',
-                    boxShadow: 3
-                  }}
-                >
-                  {drawer}
-                </Paper>
-              </Drawer>
-            </Box>
 
-        {/* Main Content Area */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-          {/* Top Navigation Bar */}
-          <AppBar
-            position="static"
+      <CollegeHeader />
+
+      <Box sx={{ display: 'flex', flexGrow: 1 }}>
+        {/* Sidebar */}
+        <Box
+          component="nav"
+          sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+          aria-label="primary navigation"
+        >
+          {/* Mobile drawer */}
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={handleDrawerToggle}
+            ModalProps={{ keepMounted: true }}
             sx={{
-              bgcolor: '#f8fafc',
-              color: 'text.primary',
-              boxShadow: 1,
+              display: { xs: 'block', md: 'none' },
+              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth, border: 'none' },
             }}
           >
-            <Toolbar>
+            {drawerContent}
+          </Drawer>
+          {/* Desktop drawer */}
+          <Drawer
+            variant="permanent"
+            sx={{
+              display: { xs: 'none', md: 'block' },
+              '& .MuiDrawer-paper': {
+                boxSizing: 'border-box',
+                width: drawerWidth,
+                position: 'relative',
+                border: 'none',
+                boxShadow: '4px 0 24px rgba(15,24,64,0.06)',
+              },
+            }}
+            open
+          >
+            {drawerContent}
+          </Drawer>
+        </Box>
+
+        {/* Main column */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
+          {/* Sub-toolbar */}
+          <AppBar
+            position="sticky"
+            elevation={0}
+            sx={{
+              backgroundColor: 'rgba(255,255,255,0.92)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              color: palette.navy.dark,
+              borderBottom: '1px solid rgba(15,24,64,0.08)',
+              top: 0,
+              zIndex: (theme) => theme.zIndex.drawer - 1,
+            }}
+          >
+            <Toolbar sx={{ minHeight: { xs: 56, md: 60 }, gap: 1 }}>
               <IconButton
-                color="inherit"
                 aria-label="open drawer"
                 edge="start"
                 onClick={handleDrawerToggle}
-                sx={{ mr: 2, display: { sm: 'none' }, color: '#1e3a8a' }}
+                sx={{ mr: 1, display: { md: 'none' }, color: palette.maroon.main }}
               >
                 <MenuIcon />
               </IconButton>
 
-              {/* Navigation Buttons */}
-              <IconButton
-                onClick={() => navigate(-1)}
-                sx={{ mr: 1, color: '#1e3a8a' }}
-                aria-label="go back"
-              >
-                <ArrowBack />
-              </IconButton>
-              <IconButton
-                onClick={() => navigate(1)}
-                sx={{ mr: 3, color: '#1e3a8a' }}
-                aria-label="go forward"
-              >
-                <ArrowForward />
-              </IconButton>
+              <Tooltip title="Back">
+                <IconButton
+                  onClick={() => navigate(-1)}
+                  size="small"
+                  sx={{ color: palette.navy.dark, mr: 0.25 }}
+                  aria-label="go back"
+                >
+                  <ArrowBack fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Forward">
+                <IconButton
+                  onClick={() => navigate(1)}
+                  size="small"
+                  sx={{ color: palette.navy.dark, mr: 1.5 }}
+                  aria-label="go forward"
+                >
+                  <ArrowForward fontSize="small" />
+                </IconButton>
+              </Tooltip>
 
-              <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, color: '#1e3a8a', fontWeight: 'bold' }}>
-                {user?.role === 'student' ? 'Student Portal' :
-                 user?.role === 'doctor' ? 'Medical Faculty Portal' :
-                 user?.role === 'hod' ? 'HOD Portal' :
-                 user?.role === 'parent' ? 'Parent Portal' :
-                 'Admin Portal'}
-              </Typography>
-              <IconButton color="inherit" sx={{ mr: 2, color: '#1e3a8a' }}>
-                <Badge badgeContent={0} color="error">
-                  <Notifications />
-                </Badge>
-              </IconButton>
-              <IconButton
-                size="large"
-                edge="end"
-                aria-label="account of current user"
-                aria-controls="primary-search-account-menu"
-                aria-haspopup="true"
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: palette.navy.light,
+                    letterSpacing: '0.22em',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    fontSize: '0.66rem',
+                    display: 'block',
+                    lineHeight: 1,
+                  }}
+                >
+                  DormDoc
+                </Typography>
+                <Typography
+                  sx={{
+                    fontFamily: '"Playfair Display", serif',
+                    fontWeight: 700,
+                    fontSize: { xs: '1rem', md: '1.15rem' },
+                    color: palette.navy.dark,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {ROLE_LABEL[user?.role] || 'Portal'}
+                </Typography>
+              </Box>
+
+              <Tooltip title="Notifications">
+                <IconButton sx={{ color: palette.navy.dark }}>
+                  <Badge badgeContent={0} color="error">
+                    <Notifications />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+
+              <Stack
+                direction="row"
+                spacing={1.25}
+                alignItems="center"
+                sx={{
+                  ml: 1,
+                  pl: 1.5,
+                  borderLeft: '1px solid rgba(15,24,64,0.1)',
+                  cursor: 'pointer',
+                }}
                 onClick={handleProfileMenuOpen}
-                color="inherit"
-                sx={{ color: '#1e3a8a' }}
               >
-                <Avatar sx={{ width: 32, height: 32, bgcolor: '#1e3a8a' }}>
-                  {user?.name?.charAt(0).toUpperCase()}
+                <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+                  <Typography sx={{ fontSize: '0.86rem', fontWeight: 600, color: palette.navy.dark, lineHeight: 1.1 }}>
+                    {user?.name || 'Member'}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: '0.66rem',
+                      color: palette.navy.light,
+                      letterSpacing: '0.16em',
+                      textTransform: 'uppercase',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {user?.role || 'guest'}
+                  </Typography>
+                </Box>
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    bgcolor: palette.maroon.main,
+                    fontFamily: '"Playfair Display", serif',
+                    fontWeight: 600,
+                  }}
+                >
+                  {(user?.name || 'D').charAt(0).toUpperCase()}
                 </Avatar>
-              </IconButton>
+              </Stack>
+
               <Menu
                 anchorEl={anchorEl}
-                anchorOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 keepMounted
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                 open={Boolean(anchorEl)}
                 onClose={handleProfileMenuClose}
+                PaperProps={{ sx: { mt: 1, minWidth: 180 } }}
               >
-                <MenuItem onClick={() => { navigate('/profile'); handleProfileMenuClose(); }}>
+                <MenuItem
+                  onClick={() => {
+                    navigate('/profile');
+                    handleProfileMenuClose();
+                  }}
+                >
+                  <ListItemIcon>
+                    <Person fontSize="small" />
+                  </ListItemIcon>
                   Profile
                 </MenuItem>
                 <Divider />
@@ -372,14 +457,14 @@ const Layout = ({ children }) => {
             </Toolbar>
           </AppBar>
 
-          {/* Main Content */}
           <Box
             component="main"
             sx={{
               flexGrow: 1,
-              p: 3,
-              bgcolor: '#f8fafc',
-              minHeight: 'calc(100vh - 200px)',
+              px: { xs: 2, md: 4 },
+              py: { xs: 3, md: 4 },
+              bgcolor: palette.cream.default,
+              minHeight: 'calc(100vh - 280px)',
             }}
           >
             {children}
@@ -387,7 +472,6 @@ const Layout = ({ children }) => {
         </Box>
       </Box>
 
-      {/* College Footer */}
       <CollegeFooter />
     </Box>
   );

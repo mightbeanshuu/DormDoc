@@ -11,8 +11,6 @@ import {
   Collapse,
   IconButton,
   Tooltip,
-  useTheme,
-  useMediaQuery,
 } from '@mui/material';
 import {
   School,
@@ -37,12 +35,10 @@ const roles = [
   { id: 'parent', title: 'Parent', icon: FamilyRestroom },
 ];
 
-const MISSION_POINTS = [
-  'Digitise dispensary records, prescriptions and appointment workflows.',
-  'Deliver real-time queue visibility and emergency SOS to every student.',
-  'Streamline ambulance dispatch and inventory across the campus.',
-  'Equip HoDs and administrators with department-level health analytics.',
-  'Provide AI-assisted triage and confidential medical guidance.',
+const HIGHLIGHTS = [
+  'Real-time appointment booking with the on-duty physician.',
+  'Emergency SOS, ambulance dispatch and live queue visibility.',
+  'Digital prescriptions, inventory and AI-assisted triage in one place.',
 ];
 
 const fade = {
@@ -74,8 +70,6 @@ const GlassPanel = ({ children, sx = {} }) => (
 const ClerkLogin = () => {
   const [selectedRole, setSelectedRole] = useState(null);
   const [devOpen, setDevOpen] = useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const dev = useDevBypass();
 
@@ -96,27 +90,37 @@ const ClerkLogin = () => {
         position: 'relative',
         minHeight: '100vh',
         overflow: 'hidden',
-        // Full-bleed campus photo with a maroon→navy fallback gradient
-        // beneath, so the design holds together even without the photo.
         backgroundColor: palette.navy.dark,
-        backgroundImage: `
-          linear-gradient(135deg, rgba(92, 15, 15, 0.78) 0%, rgba(26, 43, 92, 0.78) 60%, rgba(13, 24, 64, 0.86) 100%),
-          url('/assets/bit_campus.jpg')
-        `,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          inset: 0,
-          background:
-            'radial-gradient(900px 600px at 100% 0%, rgba(212, 162, 76, 0.18), transparent 60%), radial-gradient(700px 500px at 0% 100%, rgba(123, 30, 30, 0.30), transparent 65%)',
-          pointerEvents: 'none',
-        },
       }}
     >
-      {/* ─── Top header bar ───────────────────────────────── */}
+      {/* ── Background watermark of the BIT main building ── */}
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: "url('/assets/bit_campus.jpg')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.32,
+          filter: 'saturate(0.95) contrast(1.02)',
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          background: `
+            linear-gradient(135deg, rgba(92, 15, 15, 0.72) 0%, rgba(26, 43, 92, 0.68) 55%, rgba(6, 11, 34, 0.92) 100%),
+            radial-gradient(900px 600px at 100% 0%, rgba(212, 162, 76, 0.16), transparent 60%),
+            radial-gradient(700px 500px at 0% 100%, rgba(123, 30, 30, 0.28), transparent 65%)
+          `,
+        }}
+      />
+
+      {/* ── Top header bar ─────────────────────────────── */}
       <Box
         sx={{
           position: 'relative',
@@ -138,15 +142,16 @@ const ClerkLogin = () => {
             borderRadius: '50%',
             p: 0.5,
             boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+            border: `2px solid ${palette.gold}`,
           }}
         />
         <Box>
           <Typography
             sx={{
               color: '#FFFFFF',
-              fontWeight: 800,
+              fontWeight: 700,
               fontSize: { xs: '1.05rem', md: '1.45rem' },
-              letterSpacing: '0.02em',
+              letterSpacing: '0.01em',
               lineHeight: 1.1,
               textShadow: '0 2px 8px rgba(0,0,0,0.45)',
               fontFamily: '"Playfair Display", serif',
@@ -168,7 +173,7 @@ const ClerkLogin = () => {
         </Box>
       </Box>
 
-      {/* ─── Main two-panel area ──────────────────────────── */}
+      {/* ── Main two-panel area ────────────────────────── */}
       <Box
         sx={{
           position: 'relative',
@@ -181,7 +186,7 @@ const ClerkLogin = () => {
           minHeight: { md: 'calc(100vh - 220px)' },
         }}
       >
-        {/* Left — institute info */}
+        {/* Left — institutional blurb */}
         <motion.div
           initial="hidden"
           animate="visible"
@@ -201,41 +206,42 @@ const ClerkLogin = () => {
               variant="overline"
               sx={{ color: palette.gold, letterSpacing: '0.28em' }}
             >
-              Established 1955 · NAAC A+
+              Estd. 1955 · NAAC A+ · Deemed University
             </Typography>
             <Typography
               sx={{
                 fontFamily: '"Playfair Display", serif',
-                fontSize: { md: '2.4rem', lg: '2.9rem' },
+                fontSize: { md: '2.3rem', lg: '2.8rem' },
                 fontWeight: 700,
                 color: '#FFFFFF',
-                lineHeight: 1.1,
+                lineHeight: 1.08,
                 mt: 1.5,
-                mb: 1,
+                mb: 1.5,
               }}
             >
-              Campus healthcare,
+              Where the campus
               <Box
                 component="span"
                 sx={{ display: 'block', fontStyle: 'italic', color: palette.gold }}
               >
-                elevated.
+                takes care of its own.
               </Box>
             </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.82)', mb: 3.5, fontSize: '1rem' }}>
-              DormDoc is the unified medical platform of BIT Mesra — connecting
-              students, faculty, and administrators across appointments,
-              prescriptions, ambulance dispatch, and emergency SOS.
+            <Typography sx={{ color: 'rgba(255,255,255,0.86)', mb: 3, fontSize: '1rem', lineHeight: 1.7 }}>
+              For nearly seven decades, BIT Mesra has stood for rigour, curiosity
+              and community. <strong style={{ color: palette.gold }}>DormDoc</strong> carries that ethos into campus
+              healthcare — replacing paper queues and missed slips with a single,
+              dignified system for every student, doctor and administrator.
             </Typography>
 
             <Typography
               variant="overline"
               sx={{ color: 'rgba(255,255,255,0.62)', letterSpacing: '0.22em', mb: 1 }}
             >
-              Institute Mission
+              What you can do here
             </Typography>
             <Stack spacing={1.5} sx={{ mt: 1 }}>
-              {MISSION_POINTS.map((point, idx) => (
+              {HIGHLIGHTS.map((point, idx) => (
                 <Stack key={idx} direction="row" spacing={1.5} alignItems="flex-start">
                   <Box
                     sx={{
@@ -247,7 +253,7 @@ const ClerkLogin = () => {
                       flexShrink: 0,
                     }}
                   />
-                  <Typography sx={{ color: 'rgba(255,255,255,0.88)', fontSize: '0.94rem', lineHeight: 1.6 }}>
+                  <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.94rem', lineHeight: 1.6 }}>
                     {point}
                   </Typography>
                 </Stack>
@@ -297,7 +303,6 @@ const ClerkLogin = () => {
               </Typography>
             </Box>
 
-            {/* Role chips — compact horizontal selector */}
             <ToggleButtonGroup
               exclusive
               value={selectedRole}
@@ -344,7 +349,6 @@ const ClerkLogin = () => {
               })}
             </ToggleButtonGroup>
 
-            {/* Form area */}
             <AnimatePresence mode="wait">
               {selectedRole ? (
                 <motion.div
@@ -360,7 +364,6 @@ const ClerkLogin = () => {
                       backgroundColor: 'rgba(255, 255, 255, 0.96)',
                       borderRadius: 2.5,
                       p: { xs: 2, md: 2.5 },
-                      // Clerk widget styling
                       '& .cl-rootBox, & .cl-card': {
                         width: '100%',
                         boxShadow: 'none',
@@ -459,7 +462,6 @@ const ClerkLogin = () => {
               )}
             </AnimatePresence>
 
-            {/* Dev bypass — only renders in non-prod builds */}
             {dev.enabled && (
               <Box sx={{ mt: 3 }}>
                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 2 }}>
@@ -526,7 +528,7 @@ const ClerkLogin = () => {
         </motion.div>
       </Box>
 
-      {/* ─── Footer ─────────────────────────────────────── */}
+      {/* ── Footer ─────────────────────────────────────── */}
       <Box
         sx={{
           position: 'relative',
@@ -546,7 +548,6 @@ const ClerkLogin = () => {
           POWERED BY DORMDOC · © {new Date().getFullYear()} BIT MESRA
         </Typography>
       </Box>
-      {isMobile /* keep the institute info accessible on mobile too */ && null}
     </Box>
   );
 };
