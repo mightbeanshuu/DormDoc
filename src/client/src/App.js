@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
+import { ClerkProvider } from '@clerk/clerk-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ToastContainer } from 'react-toastify';
@@ -7,6 +7,9 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { ClerkAuthProvider } from './contexts/ClerkAuthContext';
+import { DevBypassProvider } from './contexts/DevBypassContext';
+import RequireAuth from './components/Auth/RequireAuth';
+import DevBypassBanner from './components/DevBypassBanner';
 import Layout from './components/Layout/Layout';
 import DashboardRouter from './components/DashboardRouter';
 import LocationGate from './components/LocationGate';
@@ -134,6 +137,7 @@ function App() {
   return (
     <ClerkProvider publishableKey={clerkPubKey}>
       <QueryClientProvider client={queryClient}>
+        <DevBypassProvider>
         <ClerkAuthProvider>
           <Router>
             <LocationGate>
@@ -143,15 +147,14 @@ function App() {
               <Route path="/login" element={<ClerkLogin />} />
               <Route path="/register" element={<ClerkRegister />} />
               <Route path="/onboarding" element={<Onboarding />} />
-              
+
               {/* Protected Routes */}
               <Route
                 path="/*"
                 element={
-                  <>
-                    <SignedIn>
-                      <Layout>
-                        <Routes>
+                  <RequireAuth>
+                    <Layout>
+                      <Routes>
                           {/* Dynamic Dashboard Route */}
                           <Route path="dashboard" element={<DashboardRouter />} />
                           <Route index element={<Navigate to="dashboard" replace />} />
@@ -225,21 +228,19 @@ function App() {
 
                           {/* Profile Route */}
                           <Route path="profile" element={<Profile />} />
-                        </Routes>
-                      </Layout>
-                    </SignedIn>
-                    <SignedOut>
-                      <Navigate to="/login" replace />
-                    </SignedOut>
-                  </>
+                      </Routes>
+                    </Layout>
+                  </RequireAuth>
                 }
               />
             </Routes>
             </LocationGate>
             <ChatbotComponent />
             <ToastContainer />
+            <DevBypassBanner />
           </Router>
         </ClerkAuthProvider>
+        </DevBypassProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );
