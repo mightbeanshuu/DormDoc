@@ -4,9 +4,12 @@ const Student = require('../models/Student');
 const Faculty = require('../models/Faculty');
 const DispensaryStaff = require('../models/DispensaryStaff');
 const Parent = require('../models/Parent');
+const { sendOtp, pickProvider } = require('../utils/sms');
 
-// Mock OTP storage for mobile verification
+// In-memory OTP storage with throttling state per phone
 const mobileOTPs = new Map();
+const SEND_COOLDOWN_MS = 30_000;
+const MAX_VERIFY_ATTEMPTS = 5;
 
 // Helper to get the correct model based on role
 const getModelByRole = (role) => {
@@ -93,29 +96,73 @@ router.post('/sync', async (req, res) => {
 
 // Send Mobile OTP
 router.post('/send-mobile-otp', async (req, res) => {
-  const { phone } = req.body;
-  if (!phone) return res.status(400).json({ error: 'Phone number required' });
+  const rawPhone = req.body?.phone;
+  const phone = String(rawPhone || '').replace(/\D/g, '');
+  if (!phone || phone.length < 10) {
+    return res.status(400).json({ error: 'Valid phone number required' });
+  }
 
-  // Generate a 6-digit OTP
+  // Throttle: don't allow a resend within 30 seconds
+  const existing = mobileOTPs.get(phone);
+  if (existing && Date.now() - existing.sentAt < SEND_COOLDOWN_MS) {
+    const wait = Math.ceil((SEND_COOLDOWN_MS - (Date.now() - existing.sentAt)) / 1000);
+    return res.status(429).json({ error: `Please wait ${wait}s before requesting another OTP.` });
+  }
+
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  
-  // Store OTP (In production, use Redis. Using Map for demo)
-  mobileOTPs.set(phone, { otp, expires: Date.now() + 10 * 60000 }); // 10 min
+  mobileOTPs.set(phone, {
+    otp,
+    expires: Date.now() + 10 * 60_000,
+    sentAt: Date.now(),
+    attempts: 0,
+  });
 
-  // In a real app, integrate Twilio here
-  console.log(`[MOCK SMS] Sent OTP ${otp} to phone ${phone}`);
-
-  res.json({ message: 'OTP sent successfully (Check server console for mock OTP)' });
+  try {
+    const result = await sendOtp({ phone, otp });
+    res.json({
+      message: 'OTP sent successfully',
+      provider: result.provider,
+    });
+  } catch (err) {
+    console.error('[OTP] Delivery failed:', err.message);
+    // In dev mode, still report success because sendOtp logs the code to the
+    // server console as a fallback — the dev can read it from there.
+    if (process.env.NODE_ENV !== 'production') {
+      return res.json({
+        message: 'OTP generated; check server console (provider delivery failed in dev).',
+        provider: pickProvider(),
+        devFallback: true,
+      });
+    }
+    res.status(502).json({
+      error: 'Could not deliver OTP. Please try again or contact support.',
+    });
+  }
 });
 
 // Verify Mobile OTP
 router.post('/verify-mobile-otp', async (req, res) => {
-  const { phone, otp } = req.body;
-  
+  const rawPhone = req.body?.phone;
+  const phone = String(rawPhone || '').replace(/\D/g, '');
+  const otp = String(req.body?.otp || '').trim();
+
   const record = mobileOTPs.get(phone);
   if (!record) return res.status(400).json({ error: 'No OTP requested for this number' });
-  if (Date.now() > record.expires) return res.status(400).json({ error: 'OTP expired' });
-  if (record.otp !== otp) return res.status(400).json({ error: 'Invalid OTP' });
+  if (Date.now() > record.expires) {
+    mobileOTPs.delete(phone);
+    return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
+  }
+  if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
+    mobileOTPs.delete(phone);
+    return res.status(429).json({ error: 'Too many attempts. Please request a new OTP.' });
+  }
+  if (record.otp !== otp) {
+    record.attempts += 1;
+    return res.status(400).json({
+      error: 'Invalid OTP',
+      attemptsLeft: MAX_VERIFY_ATTEMPTS - record.attempts,
+    });
+  }
 
   // Success
   mobileOTPs.delete(phone);
