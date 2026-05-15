@@ -21,11 +21,36 @@ import {
   ScienceOutlined,
   ChevronRight,
   ArrowDropDownCircleOutlined,
+  CalendarMonth,
+  LocalShipping,
+  MedicalInformation,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { palette } from '../../theme';
 import { useDevBypass } from '../../contexts/DevBypassContext';
+
+/* ─── Color tokens (light cream theme matching dashboard) ────────── */
+const C = {
+  pageBg: '#f7f3ec',
+  burgundy: '#6b1620',
+  burgundyDark: '#4a1530',
+  burgundyHover: '#7a1a2a',
+  goldText: '#8a6533',
+  goldHighlight: '#d4a849',
+  goldSoft: '#e8c878',
+  heading: '#2a1a1a',
+  body: '#3a2a2a',
+  secondary: '#5a4a3a',
+  mutedLabel: '#8a6a3c',
+  cardBg: '#ffffff',
+  revealBg: '#faf6ee',
+  pillBorder: 'rgba(107, 22, 32, 0.2)',
+  cardBorder: 'rgba(107, 22, 32, 0.12)',
+  hairline: 'rgba(107, 22, 32, 0.15)',
+  hairlineFaint: 'rgba(107, 22, 32, 0.1)',
+  mutedBrown: '#6a5a4a',
+  pillText: '#4a3a3a',
+};
 
 const roles = [
   { id: 'student', title: 'Student', icon: School },
@@ -36,35 +61,44 @@ const roles = [
 ];
 
 const HIGHLIGHTS = [
-  'Real-time appointment booking with the on-duty physician.',
-  'Emergency SOS, ambulance dispatch and live queue visibility.',
-  'Digital prescriptions, inventory and AI-assisted triage in one place.',
+  {
+    icon: CalendarMonth,
+    text: 'Book appointments with the on-duty physician.',
+  },
+  {
+    icon: LocalShipping,
+    text: 'Emergency SOS and ambulance dispatch.',
+  },
+  {
+    icon: MedicalInformation,
+    text: 'Digital prescriptions and AI-assisted triage.',
+  },
 ];
 
-const fade = {
-  hidden: { opacity: 0, y: 14 },
+/* ─── Staggered fade-in variants ──────────────────────────────────── */
+const stagger = {
+  hidden: { opacity: 0, y: 16 },
   visible: (i = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: 0.07 * i, duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+    transition: { delay: 0.08 * i, duration: 0.55, ease: [0.22, 1, 0.36, 1] },
   }),
 };
 
-const GlassPanel = ({ children, sx = {} }) => (
-  <Box
+/* ─── Tracked-out label component ─────────────────────────────────── */
+const TrackedLabel = ({ children, sx = {} }) => (
+  <Typography
     sx={{
-      backgroundColor: 'rgba(13, 22, 50, 0.62)',
-      backdropFilter: 'blur(14px)',
-      WebkitBackdropFilter: 'blur(14px)',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
-      borderRadius: 3,
-      boxShadow: '0 30px 60px rgba(0, 0, 0, 0.35)',
-      color: '#FFFFFF',
+      fontSize: '9px',
+      fontWeight: 700,
+      letterSpacing: '0.22em',
+      textTransform: 'uppercase',
+      color: C.mutedLabel,
       ...sx,
     }}
   >
     {children}
-  </Box>
+  </Typography>
 );
 
 const ClerkLogin = () => {
@@ -90,219 +124,309 @@ const ClerkLogin = () => {
         position: 'relative',
         minHeight: '100vh',
         overflow: 'hidden',
-        backgroundColor: palette.navy.dark,
+        backgroundColor: C.pageBg,
+        /* Subtle radial glows for depth */
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: '-20%',
+          right: '-10%',
+          width: '60%',
+          height: '60%',
+          background: `radial-gradient(ellipse at center, rgba(212, 168, 73, 0.07) 0%, transparent 70%)`,
+          pointerEvents: 'none',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: '-15%',
+          left: '-10%',
+          width: '55%',
+          height: '55%',
+          background: `radial-gradient(ellipse at center, rgba(107, 22, 32, 0.06) 0%, transparent 70%)`,
+          pointerEvents: 'none',
+        },
       }}
     >
-      {/* ── Background watermark of the BIT main building ── */}
-      <Box
-        aria-hidden
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: "url('/assets/bit_campus.jpg')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          opacity: 0.32,
-          filter: 'saturate(0.95) contrast(1.02)',
-        }}
-      />
-      <Box
-        aria-hidden
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          background: `
-            linear-gradient(135deg, rgba(92, 15, 15, 0.72) 0%, rgba(26, 43, 92, 0.68) 55%, rgba(6, 11, 34, 0.92) 100%),
-            radial-gradient(900px 600px at 100% 0%, rgba(212, 162, 76, 0.16), transparent 60%),
-            radial-gradient(700px 500px at 0% 100%, rgba(123, 30, 30, 0.28), transparent 65%)
-          `,
-        }}
-      />
-
-      {/* ── Top header bar ─────────────────────────────── */}
+      {/* ── Burgundy header bar ───────────────────────────── */}
       <Box
         sx={{
           position: 'relative',
-          px: { xs: 3, md: 6 },
-          py: { xs: 2.5, md: 3 },
+          zIndex: 2,
+          background: `linear-gradient(90deg, ${C.burgundy} 0%, ${C.burgundyHover} 60%, ${C.burgundyDark} 100%)`,
+          px: { xs: 2.5, md: 5 },
+          py: { xs: 1.5, md: 1.8 },
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: 2,
         }}
       >
-        <Box
-          component="img"
-          src="/assets/bit_logo.png"
-          alt="BIT Mesra"
-          sx={{
-            width: { xs: 56, md: 68 },
-            height: { xs: 56, md: 68 },
-            background: '#FFFFFF',
-            borderRadius: '50%',
-            p: 0.5,
-            boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
-            border: `2px solid ${palette.gold}`,
-          }}
-        />
-        <Box>
-          <Typography
+        <Stack direction="row" alignItems="center" spacing={1.8}>
+          {/* Official BIT Mesra crest */}
+          <Box
+            component="img"
+            src="/assets/bit_logo.png"
+            alt="Birla Institute of Technology, Mesra"
             sx={{
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: { xs: '1.05rem', md: '1.45rem' },
-              letterSpacing: '0.01em',
-              lineHeight: 1.1,
-              textShadow: '0 2px 8px rgba(0,0,0,0.45)',
-              fontFamily: '"Playfair Display", serif',
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              filter: 'drop-shadow(0 0 8px rgba(255, 240, 200, 0.15))',
             }}
-          >
-            Birla Institute of Technology, Mesra
-          </Typography>
-          <Typography
-            sx={{
-              color: palette.gold,
-              fontWeight: 600,
-              letterSpacing: '0.24em',
-              fontSize: { xs: '0.7rem', md: '0.78rem' },
-              textTransform: 'uppercase',
-            }}
-          >
-            DormDoc · Campus Dispensary System
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* ── Main two-panel area ────────────────────────── */}
-      <Box
-        sx={{
-          position: 'relative',
-          px: { xs: 2.5, md: 6 },
-          pb: { xs: 6, md: 4 },
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          gap: { xs: 3, md: 4 },
-          alignItems: 'stretch',
-          minHeight: { md: 'calc(100vh - 220px)' },
-        }}
-      >
-        {/* Left — institutional blurb */}
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={fade}
-          custom={1}
-          style={{ flex: 1.1, display: 'flex' }}
-        >
-          <GlassPanel
-            sx={{
-              flex: 1,
-              p: { xs: 3, md: 4.5 },
-              display: { xs: 'none', md: 'flex' },
-              flexDirection: 'column',
-            }}
-          >
+          />
+          <Box>
             <Typography
-              variant="overline"
-              sx={{ color: palette.gold, letterSpacing: '0.28em' }}
+              sx={{
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: { xs: '0.92rem', md: '1.1rem' },
+                letterSpacing: '0.01em',
+                lineHeight: 1.15,
+                fontFamily: '"Playfair Display", serif',
+              }}
             >
-              Estd. 1955 · NAAC A+ · Deemed University
+              Birla Institute of Technology, Mesra
             </Typography>
             <Typography
               sx={{
-                fontFamily: '"Playfair Display", serif',
-                fontSize: { md: '2.3rem', lg: '2.8rem' },
-                fontWeight: 700,
-                color: '#FFFFFF',
-                lineHeight: 1.08,
-                mt: 1.5,
-                mb: 1.5,
+                color: C.goldSoft,
+                fontWeight: 600,
+                letterSpacing: '0.2em',
+                fontSize: { xs: '0.6rem', md: '0.68rem' },
+                textTransform: 'uppercase',
+                mt: 0.2,
               }}
             >
-              Where the campus
-              <Box
-                component="span"
-                sx={{ display: 'block', fontStyle: 'italic', color: palette.gold }}
-              >
-                takes care of its own.
-              </Box>
+              DormDoc · Campus Dispensary System
             </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.86)', mb: 3, fontSize: '1rem', lineHeight: 1.7 }}>
-              For nearly seven decades, BIT Mesra has stood for rigour, curiosity
-              and community. <strong style={{ color: palette.gold }}>DormDoc</strong> carries that ethos into campus
-              healthcare — replacing paper queues and missed slips with a single,
-              dignified system for every student, doctor and administrator.
-            </Typography>
+          </Box>
+        </Stack>
 
-            <Typography
-              variant="overline"
-              sx={{ color: 'rgba(255,255,255,0.62)', letterSpacing: '0.22em', mb: 1 }}
-            >
-              What you can do here
-            </Typography>
-            <Stack spacing={1.5} sx={{ mt: 1 }}>
-              {HIGHLIGHTS.map((point, idx) => (
-                <Stack key={idx} direction="row" spacing={1.5} alignItems="flex-start">
-                  <Box
-                    sx={{
-                      mt: '8px',
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      backgroundColor: palette.gold,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.94rem', lineHeight: 1.6 }}>
-                    {point}
-                  </Typography>
-                </Stack>
-              ))}
-            </Stack>
+        <Typography
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            color: 'rgba(255, 255, 255, 0.7)',
+            fontSize: '0.62rem',
+            fontWeight: 600,
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            textAlign: 'right',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          ESTD. 1955 · NAAC A+ · DEEMED UNIVERSITY
+        </Typography>
+      </Box>
 
-            <Box sx={{ mt: 'auto', pt: 4 }}>
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 2 }} />
-              <Typography
-                variant="caption"
-                sx={{ color: 'rgba(255,255,255,0.6)', letterSpacing: '0.16em' }}
-              >
-                A BIT MESRA DIGITAL INITIATIVE
-              </Typography>
-            </Box>
-          </GlassPanel>
-        </motion.div>
-
-        {/* Right — login */}
+      {/* ── Main two-column area ──────────────────────────── */}
+      <Box
+        sx={{
+          position: 'relative',
+          zIndex: 1,
+          px: { xs: 2.5, md: 5 },
+          py: { xs: 4, md: 5 },
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: { xs: 4, md: 5 },
+          alignItems: 'flex-start',
+          minHeight: { md: 'calc(100vh - 180px)' },
+          maxWidth: 1200,
+          mx: 'auto',
+        }}
+      >
+        {/* ── Left column — editorial (no card wrapper) ──── */}
         <motion.div
           initial="hidden"
           animate="visible"
-          variants={fade}
+          variants={stagger}
+          custom={0}
+          style={{
+            flex: 1.15,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'flex' },
+              flexDirection: 'column',
+              pt: 2,
+            }}
+          >
+            <motion.div variants={stagger} custom={1}>
+              <TrackedLabel sx={{ mb: 1.5 }}>
+                Estd. 1955 · NAAC A+ · Deemed University
+              </TrackedLabel>
+            </motion.div>
+
+            <motion.div variants={stagger} custom={2}>
+              <Typography
+                sx={{
+                  fontFamily: '"Playfair Display", serif',
+                  fontSize: { md: '2.4rem', lg: '2.9rem' },
+                  fontWeight: 700,
+                  color: C.heading,
+                  lineHeight: 1.08,
+                  letterSpacing: '-0.025em',
+                  mt: 0.5,
+                  mb: 2,
+                }}
+              >
+                Where the campus{' '}
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'block',
+                    fontStyle: 'italic',
+                    color: C.goldText,
+                    fontFamily: '"Playfair Display", serif',
+                  }}
+                >
+                  takes care of its own.
+                </Box>
+              </Typography>
+            </motion.div>
+
+            <motion.div variants={stagger} custom={3}>
+              <Typography
+                sx={{
+                  color: C.body,
+                  mb: 3.5,
+                  fontSize: '1rem',
+                  lineHeight: 1.7,
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{ color: C.burgundy, fontWeight: 500 }}
+                >
+                  DormDoc
+                </Box>{' '}
+                brings campus healthcare into one dignified system — for every
+                student, doctor and administrator.
+              </Typography>
+            </motion.div>
+
+            <motion.div variants={stagger} custom={4}>
+              <TrackedLabel sx={{ mb: 1.5 }}>
+                What you can do here
+              </TrackedLabel>
+            </motion.div>
+
+            <Stack spacing={2} sx={{ mt: 0.5 }}>
+              {HIGHLIGHTS.map((point, idx) => {
+                const Icon = point.icon;
+                return (
+                  <motion.div key={idx} variants={stagger} custom={5 + idx}>
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                      <Box
+                        sx={{
+                          mt: '2px',
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(107, 22, 32, 0.08)',
+                          display: 'grid',
+                          placeItems: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon sx={{ fontSize: 13, color: C.burgundy }} />
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: C.body,
+                          fontSize: '0.94rem',
+                          lineHeight: 1.65,
+                        }}
+                      >
+                        {point.text}
+                      </Typography>
+                    </Stack>
+                  </motion.div>
+                );
+              })}
+            </Stack>
+
+            <motion.div variants={stagger} custom={8}>
+              <Box sx={{ mt: 'auto', pt: 5 }}>
+                <Divider sx={{ borderColor: C.hairline, mb: 2 }} />
+                <TrackedLabel>A BIT Mesra Digital Initiative</TrackedLabel>
+              </Box>
+            </motion.div>
+          </Box>
+        </motion.div>
+
+        {/* ── Right column — login card ───────────────────── */}
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={stagger}
           custom={2}
           style={{ flex: 1, display: 'flex' }}
         >
-          <GlassPanel sx={{ flex: 1, p: { xs: 3, md: 4.5 }, display: 'flex', flexDirection: 'column' }}>
+          <Box
+            sx={{
+              flex: 1,
+              backgroundColor: C.cardBg,
+              borderRadius: '16px',
+              border: `0.5px solid ${C.cardBorder}`,
+              boxShadow: `
+                0 12px 40px rgba(74, 21, 48, 0.06),
+                0 1px 0 rgba(255, 255, 255, 0.8) inset
+              `,
+              p: { xs: 3, md: 4 },
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 200ms ease, box-shadow 200ms ease',
+              '&:hover': {
+                transform: 'translateY(-1px)',
+                boxShadow: `
+                  0 16px 48px rgba(74, 21, 48, 0.08),
+                  0 1px 0 rgba(255, 255, 255, 0.8) inset
+                `,
+              },
+            }}
+          >
             <Box>
               <Typography
                 sx={{
                   fontFamily: '"Playfair Display", serif',
                   fontWeight: 700,
-                  fontSize: { xs: '1.6rem', md: '1.85rem' },
-                  color: '#FFFFFF',
+                  fontSize: { xs: '1.55rem', md: '1.8rem' },
+                  color: C.heading,
+                  letterSpacing: '-0.025em',
                   mb: 0.5,
                 }}
               >
                 Welcome.{' '}
-                <Box component="span" sx={{ color: palette.gold, fontStyle: 'italic' }}>
+                <Box
+                  component="span"
+                  sx={{
+                    color: C.goldText,
+                    fontStyle: 'italic',
+                    fontFamily: '"Playfair Display", serif',
+                  }}
+                >
                   Please log in.
                 </Box>
               </Typography>
-              <Typography sx={{ color: 'rgba(255,255,255,0.78)', mb: 2.5 }}>
+              <Typography
+                sx={{
+                  color: C.secondary,
+                  mb: 2.5,
+                  fontSize: '0.92rem',
+                  lineHeight: 1.6,
+                }}
+              >
                 {selectedRole
                   ? `Continue as ${roles.find((r) => r.id === selectedRole)?.title}.`
                   : 'Choose your role to continue to DormDoc.'}
               </Typography>
             </Box>
 
+            {/* ── Role selector pills ──────────────────────── */}
             <ToggleButtonGroup
               exclusive
               value={selectedRole}
@@ -312,26 +436,29 @@ const ClerkLogin = () => {
                 gap: 1,
                 mb: 3,
                 '& .MuiToggleButton-root': {
-                  color: 'rgba(255,255,255,0.78)',
-                  border: '1px solid rgba(255,255,255,0.18)',
+                  color: C.pillText,
+                  backgroundColor: C.cardBg,
+                  border: `0.5px solid ${C.pillBorder}`,
                   borderRadius: '999px !important',
                   px: 1.8,
-                  py: 0.85,
+                  py: 0.8,
                   textTransform: 'none',
-                  fontWeight: 600,
+                  fontWeight: 500,
                   fontSize: '0.82rem',
-                  letterSpacing: '0.04em',
-                  backgroundColor: 'rgba(255,255,255,0.04)',
-                  transition: 'all 180ms ease',
+                  letterSpacing: '0.03em',
+                  transition: 'all 200ms ease',
                   '&:hover': {
-                    borderColor: palette.gold,
-                    backgroundColor: 'rgba(212, 162, 76, 0.1)',
+                    borderColor: C.burgundy,
+                    backgroundColor: 'rgba(107, 22, 32, 0.04)',
                   },
                   '&.Mui-selected': {
-                    backgroundColor: 'rgba(212, 162, 76, 0.22)',
-                    color: '#FFFFFF',
-                    borderColor: palette.gold,
-                    '&:hover': { backgroundColor: 'rgba(212, 162, 76, 0.3)' },
+                    backgroundColor: C.burgundy,
+                    color: '#f5e8c8',
+                    borderColor: C.burgundy,
+                    fontWeight: 500,
+                    '&:hover': {
+                      backgroundColor: C.burgundyHover,
+                    },
                   },
                 },
               }}
@@ -340,8 +467,8 @@ const ClerkLogin = () => {
                 const Icon = role.icon;
                 return (
                   <ToggleButton key={role.id} value={role.id}>
-                    <Stack direction="row" spacing={0.9} alignItems="center">
-                      <Icon sx={{ fontSize: 17 }} />
+                    <Stack direction="row" spacing={0.8} alignItems="center">
+                      <Icon sx={{ fontSize: 16 }} />
                       <span>{role.title}</span>
                     </Stack>
                   </ToggleButton>
@@ -349,88 +476,116 @@ const ClerkLogin = () => {
               })}
             </ToggleButtonGroup>
 
+            {/* ── Reveal panel ─────────────────────────────── */}
             <AnimatePresence mode="wait">
               {selectedRole ? (
                 <motion.div
                   key="signin"
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                   style={{ flex: 1 }}
                 >
                   <Box
                     sx={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                      backgroundColor: C.revealBg,
+                      border: '1px solid rgba(212, 168, 73, 0.25)',
                       borderRadius: 2.5,
-                      p: { xs: 2, md: 2.5 },
-                      '& .cl-rootBox, & .cl-card': {
-                        width: '100%',
-                        boxShadow: 'none',
-                        border: 'none',
-                        padding: 0,
-                        background: 'transparent',
-                      },
+                      p: { xs: 2.5, md: 3 },
                     }}
                   >
-                    <SignIn
-                      appearance={{
-                        variables: {
-                          colorPrimary: palette.maroon.main,
-                          colorText: palette.navy.dark,
-                          colorTextSecondary: palette.navy.light,
-                          colorBackground: '#FFFFFF',
-                          borderRadius: '10px',
-                          fontFamily: '"Inter", sans-serif',
-                        },
-                        elements: {
-                          rootBox: { width: '100%' },
-                          card: {
-                            width: '100%',
-                            boxShadow: 'none',
-                            border: 'none',
-                            padding: 0,
-                            background: 'transparent',
-                          },
-                          header: { display: 'none' },
-                          formButtonPrimary: {
-                            backgroundColor: palette.maroon.main,
-                            padding: '12px',
-                            fontSize: '0.95rem',
-                            fontWeight: 700,
-                            letterSpacing: 0.3,
-                            textTransform: 'none',
-                            boxShadow: '0 6px 16px rgba(123, 30, 30, 0.3)',
-                            '&:hover': { backgroundColor: palette.maroon.dark },
-                          },
-                          socialButtonsBlockButton: {
-                            padding: '11px',
-                            border: '1px solid rgba(15, 24, 64, 0.14)',
-                            borderRadius: '10px',
-                            '&:hover': { backgroundColor: 'rgba(15, 24, 64, 0.03)' },
-                          },
-                          formFieldInput: {
-                            padding: '12px',
-                            border: '1px solid rgba(15, 24, 64, 0.16)',
-                            borderRadius: '10px',
-                            backgroundColor: '#FFFFFF',
-                            '&:focus': {
-                              borderColor: palette.maroon.main,
-                              boxShadow: `0 0 0 4px ${palette.maroon.main}1f`,
-                            },
-                          },
-                          footerActionLink: {
-                            color: palette.maroon.main,
-                            fontWeight: 700,
-                            '&:hover': { color: palette.maroon.dark },
-                          },
-                          dividerLine: { backgroundColor: 'rgba(15, 24, 64, 0.1)' },
-                          dividerText: { color: palette.navy.light },
+                    <TrackedLabel sx={{ mb: 2 }}>
+                      {roles.find((r) => r.id === selectedRole)?.title} Sign-In
+                    </TrackedLabel>
+
+                    <Box
+                      sx={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 2,
+                        p: { xs: 1.5, md: 2 },
+                        '& .cl-rootBox, & .cl-card': {
+                          width: '100%',
+                          boxShadow: 'none',
+                          border: 'none',
+                          padding: 0,
+                          background: 'transparent',
                         },
                       }}
-                      redirectUrl="/dashboard"
-                      signUpUrl="/register"
-                    />
+                    >
+                      <SignIn
+                        appearance={{
+                          variables: {
+                            colorPrimary: C.burgundy,
+                            colorText: C.heading,
+                            colorTextSecondary: C.secondary,
+                            colorBackground: '#FFFFFF',
+                            borderRadius: '10px',
+                            fontFamily: '"Inter", sans-serif',
+                          },
+                          elements: {
+                            rootBox: { width: '100%' },
+                            card: {
+                              width: '100%',
+                              boxShadow: 'none',
+                              border: 'none',
+                              padding: 0,
+                              background: 'transparent',
+                            },
+                            header: { display: 'none' },
+                            formButtonPrimary: {
+                              backgroundColor: C.burgundy,
+                              padding: '12px',
+                              fontSize: '0.95rem',
+                              fontWeight: 700,
+                              letterSpacing: 0.3,
+                              textTransform: 'none',
+                              color: '#f5e8c8',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 12px rgba(107, 22, 32, 0.25)',
+                              '&:hover': { backgroundColor: C.burgundyHover },
+                            },
+                            socialButtonsBlockButton: {
+                              padding: '11px',
+                              border: `1px solid ${C.cardBorder}`,
+                              borderRadius: '10px',
+                              '&:hover': { backgroundColor: 'rgba(107, 22, 32, 0.03)' },
+                            },
+                            formFieldInput: {
+                              padding: '12px',
+                              border: `1px solid rgba(107, 22, 32, 0.16)`,
+                              borderRadius: '10px',
+                              backgroundColor: '#FFFFFF',
+                              '&:focus': {
+                                borderColor: C.burgundy,
+                                boxShadow: `0 0 0 4px rgba(107, 22, 32, 0.1)`,
+                              },
+                            },
+                            footerActionLink: {
+                              color: C.burgundy,
+                              fontWeight: 700,
+                              '&:hover': { color: C.burgundyHover },
+                            },
+                            dividerLine: { backgroundColor: C.hairlineFaint },
+                            dividerText: { color: C.secondary },
+                          },
+                        }}
+                        redirectUrl="/dashboard"
+                        signUpUrl="/register"
+                      />
+                    </Box>
+
+                    <Typography
+                      sx={{
+                        textAlign: 'center',
+                        mt: 2,
+                        fontSize: '0.72rem',
+                        color: C.mutedBrown,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      Authenticated by Clerk · Powered by DormDoc
+                    </Typography>
                   </Box>
                 </motion.div>
               ) : (
@@ -439,22 +594,31 @@ const ClerkLogin = () => {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                 >
                   <Box
                     sx={{
-                      backgroundColor: 'rgba(255,255,255,0.06)',
-                      border: '1px dashed rgba(255,255,255,0.16)',
+                      backgroundColor: C.revealBg,
+                      border: '1px solid rgba(212, 168, 73, 0.25)',
                       borderRadius: 2.5,
                       p: 3,
                       textAlign: 'center',
-                      color: 'rgba(255,255,255,0.85)',
                     }}
                   >
-                    <ChevronRight sx={{ color: palette.gold, mb: 0.5 }} />
-                    <Typography sx={{ fontWeight: 600 }}>
+                    <ChevronRight sx={{ color: C.goldHighlight, mb: 0.5 }} />
+                    <Typography
+                      sx={{ fontWeight: 600, color: C.body, fontSize: '0.92rem' }}
+                    >
                       Pick a role above to reveal the secure login.
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                    <Typography
+                      sx={{
+                        fontSize: '0.72rem',
+                        color: C.mutedBrown,
+                        mt: 0.5,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
                       Authenticated by Clerk · Powered by DormDoc
                     </Typography>
                   </Box>
@@ -462,28 +626,41 @@ const ClerkLogin = () => {
               )}
             </AnimatePresence>
 
+            {/* ── Developer tools ──────────────────────────── */}
             {dev.enabled && (
               <Box sx={{ mt: 3 }}>
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 2 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{ color: 'rgba(255,255,255,0.55)', letterSpacing: '0.18em' }}
-                  >
-                    DEVELOPER TOOLS
-                  </Typography>
-                </Divider>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Divider
+                  sx={{
+                    borderColor: C.hairlineFaint,
+                    borderWidth: '0.5px',
+                    mb: 2,
+                  }}
+                />
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
                   <Stack direction="row" spacing={1.2} alignItems="center">
-                    <ScienceOutlined sx={{ color: palette.gold, fontSize: 20 }} />
-                    <Typography sx={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
-                      Admin bypass — skip auth, load the dashboard
-                    </Typography>
+                    <ScienceOutlined sx={{ color: C.goldText, fontSize: 18 }} />
+                    <Box>
+                      <TrackedLabel>Developer Tools</TrackedLabel>
+                      <Typography
+                        sx={{
+                          color: C.mutedBrown,
+                          fontSize: '0.82rem',
+                          mt: 0.3,
+                        }}
+                      >
+                        Admin bypass — skip auth, load the dashboard
+                      </Typography>
+                    </Box>
                   </Stack>
                   <Tooltip title={devOpen ? 'Hide' : 'Show roles'}>
                     <IconButton
                       onClick={() => setDevOpen((v) => !v)}
                       sx={{
-                        color: palette.gold,
+                        color: C.goldText,
                         transition: 'transform 200ms ease',
                         transform: devOpen ? 'rotate(180deg)' : 'none',
                       }}
@@ -493,7 +670,13 @@ const ClerkLogin = () => {
                   </Tooltip>
                 </Stack>
                 <Collapse in={devOpen}>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    flexWrap="wrap"
+                    useFlexGap
+                    sx={{ mt: 2 }}
+                  >
                     {dev.availableRoles.map((role) => (
                       <Button
                         key={role}
@@ -501,12 +684,16 @@ const ClerkLogin = () => {
                         size="small"
                         onClick={() => handleDevBypass(role)}
                         sx={{
-                          color: '#FFFFFF',
-                          borderColor: 'rgba(255,255,255,0.25)',
+                          color: C.burgundy,
+                          borderColor: C.pillBorder,
                           textTransform: 'capitalize',
+                          borderRadius: '8px',
+                          fontSize: '0.78rem',
+                          fontWeight: 500,
+                          transition: 'all 200ms ease',
                           '&:hover': {
-                            borderColor: palette.gold,
-                            backgroundColor: 'rgba(212, 162, 76, 0.12)',
+                            borderColor: C.burgundy,
+                            backgroundColor: 'rgba(107, 22, 32, 0.05)',
                           },
                         }}
                       >
@@ -515,37 +702,58 @@ const ClerkLogin = () => {
                     ))}
                   </Stack>
                   <Typography
-                    variant="caption"
-                    sx={{ display: 'block', color: 'rgba(255,255,255,0.55)', mt: 1.5 }}
+                    sx={{
+                      display: 'block',
+                      fontSize: '0.72rem',
+                      color: C.mutedBrown,
+                      mt: 1.5,
+                      lineHeight: 1.5,
+                    }}
                   >
-                    Visible only in development builds. Use it to inspect dashboard UI
-                    without going through Clerk.
+                    Visible only in development builds. Use it to inspect dashboard
+                    UI without going through Clerk.
                   </Typography>
                 </Collapse>
               </Box>
             )}
-          </GlassPanel>
+          </Box>
         </motion.div>
       </Box>
 
-      {/* ── Footer ─────────────────────────────────────── */}
+      {/* ── Footer ────────────────────────────────────────── */}
       <Box
         sx={{
           position: 'relative',
-          px: { xs: 3, md: 6 },
+          zIndex: 1,
+          px: { xs: 2.5, md: 5 },
           pb: 2.5,
           display: 'flex',
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
           gap: 1,
-          color: 'rgba(255,255,255,0.7)',
         }}
       >
-        <Typography variant="caption" sx={{ letterSpacing: '0.16em' }}>
-          TERMS & CONDITIONS · PRIVACY
+        <Typography
+          sx={{
+            fontSize: '0.65rem',
+            letterSpacing: '0.18em',
+            color: C.mutedBrown,
+            fontWeight: 600,
+            textTransform: 'uppercase',
+          }}
+        >
+          Terms & Conditions · Privacy
         </Typography>
-        <Typography variant="caption" sx={{ letterSpacing: '0.16em' }}>
-          POWERED BY DORMDOC · © {new Date().getFullYear()} BIT MESRA
+        <Typography
+          sx={{
+            fontSize: '0.65rem',
+            letterSpacing: '0.18em',
+            color: C.mutedBrown,
+            fontWeight: 600,
+            textTransform: 'uppercase',
+          }}
+        >
+          Powered by DormDoc · © {new Date().getFullYear()} BIT Mesra
         </Typography>
       </Box>
     </Box>
