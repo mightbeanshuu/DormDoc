@@ -1,193 +1,317 @@
-<p align="center">
-  <img src="assets/logo.png" alt="DormDoc Logo" width="120" />
-</p>
+<div align="center">
+
+<img src="assets/logo.png" alt="DormDoc" width="140" />
 
 # DormDoc
 
-*A comprehensive college dispensary management system that digitises campus healthcare.*
+### **Reimagining campus healthcare for the digital age.**
 
-<!-- Badges -->
-![CI](https://github.com/mightbeanshuu/DormDoc/actions/workflows/ci.yml/badge.svg)
-![Release](https://img.shields.io/github/v/release/mightbeanshuu/DormDoc?style=flat-square)
-![License](https://img.shields.io/github/license/mightbeanshuu/DormDoc?style=flat-square)
-![Languages](https://img.shields.io/github/languages/count/mightbeanshuu/DormDoc?style=flat-square)
-![Top Language](https://img.shields.io/github/languages/top/mightbeanshuu/DormDoc?style=flat-square)
-![Code size](https://img.shields.io/github/languages/code-size/mightbeanshuu/DormDoc?style=flat-square)
-![Last Commit](https://img.shields.io/github/last-commit/mightbeanshuu/DormDoc?style=flat-square)
-![Issues](https://img.shields.io/github/issues/mightbeanshuu/DormDoc?style=flat-square)
-![Contributors](https://img.shields.io/github/contributors/mightbeanshuu/DormDoc?style=flat-square)
+*A unified, real-time platform that transforms the college dispensary from paper trails into a connected digital practice — for students, doctors, and administrators.*
 
-<!-- Tech stack icons -->
-<p align="center">
-  <a href="https://skillicons.dev">
-    <img src="https://skillicons.dev/icons?i=js,react,nodejs,express,mongodb,html,css,materialui,git,github" alt="Tech Stack" />
-  </a>
-</p>
+<br />
+
+[![CI](https://github.com/mightbeanshuu/DormDoc/actions/workflows/ci.yml/badge.svg)](https://github.com/mightbeanshuu/DormDoc/actions)
+[![Release](https://img.shields.io/github/v/release/mightbeanshuu/DormDoc?style=flat-square&color=6366f1)](https://github.com/mightbeanshuu/DormDoc/releases)
+[![License](https://img.shields.io/github/license/mightbeanshuu/DormDoc?style=flat-square&color=10b981)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.0-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Last Commit](https://img.shields.io/github/last-commit/mightbeanshuu/DormDoc?style=flat-square&color=f59e0b)](https://github.com/mightbeanshuu/DormDoc/commits)
+[![Issues](https://img.shields.io/github/issues/mightbeanshuu/DormDoc?style=flat-square&color=ef4444)](https://github.com/mightbeanshuu/DormDoc/issues)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
+[![Code Style](https://img.shields.io/badge/code_style-ESLint-4B32C3?style=flat-square&logo=eslint&logoColor=white)](https://eslint.org/)
+
+<br />
+
+<a href="https://skillicons.dev">
+  <img src="https://skillicons.dev/icons?i=react,nodejs,express,mongodb,materialui,socketio,jwt,docker,git,github" alt="Tech Stack" />
+</a>
+
+<br /><br />
+
+**[Live Demo](https://dormdoc.netlify.app)** · **[Documentation](docs/)** · **[Report a Bug](https://github.com/mightbeanshuu/DormDoc/issues/new?labels=bug)** · **[Request a Feature](https://github.com/mightbeanshuu/DormDoc/issues/new?labels=enhancement)**
+
+</div>
 
 ---
 
-## 📑 Table of contents
+## 📚 Table of Contents
+
+<details>
+<summary>Click to expand</summary>
 
 - [Overview](#-overview)
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Getting started](#-getting-started)
-- [Usage](#-usage)
-- [Configuration](#-configuration)
+- [Why DormDoc](#-why-dormdoc)
+- [Key Features](#-key-features)
+- [Tech Stack](#%EF%B8%8F-tech-stack)
+- [System Architecture](#%EF%B8%8F-system-architecture)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
+- [Usage & API](#-usage--api)
+- [Configuration](#%EF%B8%8F-configuration)
+- [Testing](#-testing)
+- [Deployment](#-deployment)
+- [Roadmap](#%EF%B8%8F-roadmap)
 - [Contributing](#-contributing)
-- [Roadmap](#-roadmap)
+- [Security](#-security)
 - [License](#-license)
-- [Acknowledgements & credits](#-acknowledgements--credits)
+- [Acknowledgements](#-acknowledgements)
+
+</details>
 
 ---
 
 ## 🔭 Overview
 
-DormDoc is a full-stack web application purpose-built for the Birla Institute of Technology,
-Mesra to modernise its campus dispensary. It replaces paper-based workflows with a digital
-platform that connects students, doctors, and administrators through a single unified system.
+**DormDoc** is a full-stack, production-grade web application engineered to digitise every workflow inside a campus medical centre. From the moment a student scans a QR code at the counter to the moment an administrator audits monthly inventory, the entire patient journey lives inside a single, secure, real-time platform.
 
-Students can book appointments, receive digital prescriptions, trigger emergency SOS alerts,
-and interact with an AI-powered medical chatbot — all from their browser or phone. Doctors
-manage patient queues, write prescriptions, and communicate with patients in real time.
-Administrators gain a bird's-eye view through an analytics dashboard, inventory tracking,
-ambulance fleet management, and leave-request processing.
+The system replaces fragmented paper records, manual queues, and siloed spreadsheets with a unified MERN-stack solution — purpose-built for the scale, reliability, and access-control requirements of an institutional healthcare environment.
 
-The project uses a modern MERN stack (MongoDB, Express, React, Node.js) with Material-UI
-for a polished interface, Socket.io for real-time features, and JWT-based role-based access
-control to enforce student / doctor / admin boundaries.
+> *"A campus clinic should run with the same precision as the hospitals its students may one day work in."*
 
 ---
 
-## ⚡ Features
+## 💎 Why DormDoc
 
-- **QR-code identification** — Every student gets a unique QR code for instant check-in at
-  the dispensary counter.
-- **Appointment booking** — Students schedule visits with available doctors and receive
-  real-time slot confirmations.
-- **Digital prescriptions** — Doctors create, sign, and share prescriptions that students can
-  access anywhere.
-- **Emergency SOS** — One-tap emergency alerts with GPS coordinates dispatched to on-duty
-  medical staff.
-- **AI medical chatbot** — Rule-based local fallback plus optional Hugging Face / OpenAI /
-  Cohere integration for intelligent triage.
-- **Ambulance fleet management** — Admins track, dispatch, and queue ambulances across
-  campus in real time.
-- **Analytics dashboard** — Rich appointment trends, doctor performance, emergency stats, and
-  department demographics visualised with Recharts.
-- **Inventory management** — Track medical supplies, set reorder thresholds, and generate
-  stock reports.
-- **Leave application** — Students apply for medical leave backed by digital prescriptions;
-  admins approve or reject inline.
-- **Role-based access control** — JWT authentication with three distinct roles (student,
-  doctor, admin), each with tailored dashboards.
+| Pain Point (Traditional Clinic) | DormDoc Solution |
+| :--- | :--- |
+| Paper prescriptions get lost | **Digital prescriptions** signed & retrievable anytime |
+| Long queues at the dispensary | **QR-code check-in** + slot booking |
+| No visibility into emergencies | **One-tap SOS** with live GPS dispatch |
+| Inventory stockouts | **Threshold-based alerts** & auto-reorder reports |
+| No data for decision-making | **Analytics dashboard** with trend visualisation |
+| Manual leave verification | **Linked prescriptions** auto-validate leave requests |
+| Disconnected ambulance dispatch | **Live fleet tracking** & queue management |
 
 ---
 
-## 🏗️ Architecture
+## ⚡ Key Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 👨‍🎓 For Students
+- 🆔 **QR-code identity** — instant check-in at the counter
+- 📅 **Smart appointment booking** with real-time slot availability
+- 💊 **Digital prescriptions** accessible from any device
+- 🚨 **Emergency SOS** with one-tap GPS dispatch
+- 🤖 **AI medical chatbot** for symptom triage
+- 📝 **Medical leave** auto-linked to prescriptions
+- 📜 **Personal health history** in one place
+
+</td>
+<td width="50%" valign="top">
+
+### 🩺 For Doctors
+- 🗂️ **Patient queue management** with priority flags
+- ✍️ **E-prescription writer** with drug-interaction hints
+- 💬 **Real-time chat** with patients via Socket.io
+- 📊 **Appointment dashboard** with daily/weekly views
+- 📁 **Patient history lookup** across visits
+- 🔔 **Live notifications** for new bookings & SOS
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 🛠️ For Administrators
+- 📈 **Analytics dashboard** — visits, demographics, trends
+- 📦 **Inventory management** with reorder thresholds
+- 🚑 **Ambulance fleet** dispatch & queue tracking
+- ✅ **Leave-request approval** workflow
+- 👥 **User & role management** (RBAC)
+- 📤 **Exportable reports** (CSV / PDF)
+
+</td>
+<td width="50%" valign="top">
+
+### 🔒 Platform-Wide
+- 🔐 **JWT-based RBAC** — three distinct role spaces
+- 🛡️ **Helmet, CORS, rate-limiting** baked in
+- ⚡ **Socket.io real-time** layer for live UX
+- 📱 **Fully responsive** — mobile-first design
+- 🌐 **REST API** with input validation
+- 🧪 **Health-check endpoints** for monitoring
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🛠️ Tech Stack
+
+<div align="center">
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend** | React 18 · Material-UI · React Query · React Router · Recharts · Socket.io-client |
+| **Backend** | Node.js (≥18) · Express · Mongoose · Socket.io · JWT |
+| **Database** | MongoDB 6.0+ |
+| **Security** | Helmet · CORS · express-rate-limit · bcryptjs · express-validator |
+| **Integrations** | Nodemailer (SMTP) · Google Gemini / OpenAI (chatbot) · QRCode |
+| **Tooling** | ESLint · Husky · lint-staged · Nodemon · Concurrently |
+| **CI / Deploy** | GitHub Actions · Netlify · Heroku-ready |
+
+</div>
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
 graph TD
-    subgraph Client["React client (src/client)"]
-        UI[Material-UI components]
-        RQ[React Query cache]
-        CTX[Auth & Socket contexts]
+    subgraph Client["🖥️ React Client — src/client"]
+        UI[Material-UI Components]
+        RQ[React Query Cache]
+        CTX[Auth & Socket Contexts]
+        WS1[Socket.io Client]
     end
 
-    subgraph Server["Express server (src/server)"]
-        MW[Helmet / CORS / Rate-limit middleware]
-        RT[REST API routes]
-        MD[Mongoose models]
+    subgraph Server["⚙️ Express API — src/server"]
+        MW[Helmet · CORS · Rate-limit · JWT Auth]
+        RT[REST Routes — student / doctor / admin]
+        SOCK[Socket.io Server]
+        SVC[Service Layer — controllers, validators]
+        MD[Mongoose Models]
     end
 
-    subgraph External["External services"]
-        DB[(MongoDB)]
-        AI[AI APIs — HuggingFace / OpenAI]
-        MAIL[Nodemailer SMTP]
+    subgraph External["🌐 External Services"]
+        DB[(MongoDB Atlas)]
+        AI[AI Providers — Gemini / OpenAI]
+        MAIL[SMTP — Nodemailer]
+        QR[QR-Code Generator]
     end
 
-    UI -->|Axios / HTTP| RT
-    UI -->|Socket.io| RT
+    UI -->|HTTPS / Axios| MW
+    WS1 <-->|WebSocket| SOCK
     CTX --> UI
     RQ --> UI
-    RT --> MW
-    RT --> MD
+    MW --> RT
+    RT --> SVC
+    SVC --> MD
     MD --> DB
-    RT --> AI
-    RT --> MAIL
+    SVC --> AI
+    SVC --> MAIL
+    SVC --> QR
+
+    style Client fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    style Server fill:#dcfce7,stroke:#10b981,color:#064e3b
+    style External fill:#fef3c7,stroke:#f59e0b,color:#78350f
+```
+
+### Request Lifecycle
+
+1. **Client** issues an authenticated request bearing a JWT.
+2. **Middleware stack** applies Helmet, CORS, rate-limiting, and token verification.
+3. **Route handler** delegates to a controller, which validates inputs.
+4. **Service layer** orchestrates business logic across Mongoose models.
+5. **Database** persists the change; relevant events broadcast via Socket.io.
+6. **Client** receives the HTTP response and any live updates simultaneously.
+
+---
+
+## 📁 Project Structure
+
+```
+DormDoc/
+├── assets/                 # Static assets (logo, branding)
+├── docs/                   # Extended documentation
+├── scripts/                # Seed / migration scripts
+├── src/
+│   ├── client/             # React frontend
+│   │   ├── public/
+│   │   └── src/
+│   │       ├── components/
+│   │       ├── contexts/
+│   │       ├── hooks/
+│   │       ├── pages/
+│   │       └── services/
+│   └── server/             # Express backend
+│       ├── config/
+│       ├── controllers/
+│       ├── middleware/
+│       ├── models/
+│       ├── routes/
+│       ├── services/
+│       ├── utils/
+│       └── server.js
+├── tests/                  # Unit & integration tests
+├── .env.example
+├── netlify.toml
+└── package.json
 ```
 
 ---
 
-## 🚀 Getting started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-| Dependency | Min version | Install link |
-|---|---|---|
-| Node.js | 18.0 | [nodejs.org](https://nodejs.org/) |
-| npm | 9.0 | Ships with Node.js |
-| MongoDB | 6.0 | [mongodb.com/try/download](https://www.mongodb.com/try/download/community) |
-| Git | 2.30 | [git-scm.com](https://git-scm.com/) |
+| Dependency | Minimum | Notes |
+| :--- | :---: | :--- |
+| [Node.js](https://nodejs.org/) | **18.0** | LTS recommended |
+| npm | **9.0** | Bundled with Node.js |
+| [MongoDB](https://www.mongodb.com/try/download/community) | **6.0** | Local or Atlas |
+| Git | **2.30** | — |
 
 ### Installation
 
-1. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/mightbeanshuu/DormDoc.git
-   cd DormDoc
-   ```
-
-2. **Install server dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Install client dependencies**
-
-   ```bash
-   npm run install-client
-   ```
-
-4. **Create your environment file**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Open `.env` and fill in your MongoDB URI, JWT secret, and any optional API keys.
-
-### Quick start
-
 ```bash
+# 1. Clone the repository
+git clone https://github.com/mightbeanshuu/DormDoc.git
+cd DormDoc
+
+# 2. Install root + client dependencies
+npm install
+npm run install-client
+
+# 3. Create your environment file
+cp .env.example .env
+#    → fill in MONGODB_URI, JWT_SECRET, and any optional keys
+
+# 4. (Optional) Seed the database with demo data
+npm run seed
+
+# 5. Launch the full stack in dev mode
 npm run dev
 ```
 
-This starts both the Express API (port 5000) and the React dev server (port 3000)
-concurrently. Open [http://localhost:3000](http://localhost:3000) in your browser.
+The dev server boots:
+- ⚛️  **React client** → http://localhost:3000
+- 🔌 **Express API** → http://localhost:5000
 
 ---
 
-## 💡 Usage
+## 💡 Usage & API
 
-### Booking an appointment (student)
+### Health check
 
 ```bash
-# After logging in as a student, call the REST API directly:
+curl http://localhost:5000/api/health
+```
+
+```json
+{
+  "status": "OK",
+  "timestamp": "2026-05-21T00:00:00.000Z",
+  "uptime": 123.456
+}
+```
+
+### Book an appointment (student)
+
+```bash
 curl -X POST http://localhost:5000/api/student/appointments \
   -H "Authorization: Bearer <JWT_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "doctorId": "64f1a2b3c4d5e6f7a8b9c0d1",
-    "date": "2026-05-10",
+    "date": "2026-05-25",
     "timeSlot": "10:00 AM",
     "reason": "Routine check-up"
   }'
 ```
-
-Expected response:
 
 ```json
 {
@@ -195,89 +319,157 @@ Expected response:
   "appointment": {
     "_id": "64f1a2b3c4d5e6f7a8b9c0d2",
     "status": "scheduled",
-    "date": "2026-05-10T00:00:00.000Z"
+    "date": "2026-05-25T00:00:00.000Z"
   }
 }
 ```
 
-### Checking system health
+### Trigger an emergency SOS
 
 ```bash
-curl http://localhost:5000/api/health
+curl -X POST http://localhost:5000/api/student/sos \
+  -H "Authorization: Bearer <JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "lat": 23.4126, "lng": 85.4396, "note": "Severe chest pain" }'
 ```
 
-Expected response:
-
-```json
-{
-  "status": "OK",
-  "timestamp": "2026-05-07T00:00:00.000Z",
-  "uptime": 123.456
-}
-```
+A full route inventory lives in [`docs/api.md`](docs/api.md).
 
 ---
 
 ## ⚙️ Configuration
 
-| Variable | Default | Required | Description |
-|---|---|---|---|
-| `NODE_ENV` | `development` | No | App environment (`development` / `production`) |
-| `PORT` | `5000` | No | Express server port |
-| `MONGODB_URI` | `mongodb://localhost:27017/college-dispensary` | **Yes** | MongoDB connection string |
-| `JWT_SECRET` | — | **Yes** | Secret key for signing JSON Web Tokens |
-| `JWT_EXPIRE` | `7d` | No | Token expiry duration |
-| `CLIENT_URL` | `http://localhost:3000` | No | Allowed CORS origin for the React client |
-| `GOOGLE_AI_API_KEY` | — | No | Google AI (Gemini) API key for chatbot |
-| `OPENAI_API_KEY` | — | No | OpenAI API key for chatbot |
-| `EMAIL_HOST` | `smtp.gmail.com` | No | SMTP host for outbound emails |
-| `EMAIL_PORT` | `587` | No | SMTP port |
-| `EMAIL_USER` | — | No | SMTP username |
-| `EMAIL_PASS` | — | No | SMTP password / app password |
-| `QR_CODE_SECRET` | — | No | Secret for QR code generation |
-| `ERP_API_URL` | — | No | External ERP system endpoint |
-| `ERP_API_KEY` | — | No | ERP API key |
+All runtime configuration is driven by environment variables. Copy [`.env.example`](.env.example) to `.env` and customise.
 
-See [`.env.example`](.env.example) for a ready-to-copy template.
+| Variable | Required | Default | Purpose |
+| :--- | :---: | :--- | :--- |
+| `NODE_ENV` |  | `development` | Runtime environment |
+| `PORT` |  | `5000` | Express server port |
+| `MONGODB_URI` | ✅ | `mongodb://localhost:27017/dormdoc` | MongoDB connection URI |
+| `JWT_SECRET` | ✅ | — | JWT signing secret |
+| `JWT_EXPIRE` |  | `7d` | Token lifetime |
+| `CLIENT_URL` |  | `http://localhost:3000` | Allowed CORS origin |
+| `GOOGLE_AI_API_KEY` |  | — | Gemini API key (chatbot) |
+| `OPENAI_API_KEY` |  | — | OpenAI API key (chatbot) |
+| `EMAIL_HOST` |  | `smtp.gmail.com` | SMTP host |
+| `EMAIL_PORT` |  | `587` | SMTP port |
+| `EMAIL_USER` |  | — | SMTP username |
+| `EMAIL_PASS` |  | — | SMTP password / app token |
+| `QR_CODE_SECRET` |  | — | QR-code signing secret |
+| `ERP_API_URL` |  | — | External ERP endpoint |
+| `ERP_API_KEY` |  | — | External ERP key |
+
+> ⚠️  **Never commit your `.env` file.** It is git-ignored by default.
 
 ---
 
-## 🤝 Contributing
+## 🧪 Testing
 
-We welcome contributions of all kinds — bug fixes, new features, documentation improvements,
-and more. Please read our [Contributing guide](CONTRIBUTING.md) for details on the fork →
-branch → commit → PR workflow, code style expectations, and how to run tests locally.
+```bash
+# Run the full test suite
+npm test
+
+# Lint the entire codebase
+npm run lint
+
+# Format with Prettier (if configured)
+npm run format
+```
+
+Test coverage reports are generated under `coverage/` and uploaded by CI on every push.
+
+---
+
+## 📦 Deployment
+
+DormDoc ships with deployment recipes for multiple platforms:
+
+| Platform | Status |
+| :--- | :---: |
+| **Netlify** (client) | ✅ Configured via `netlify.toml` |
+| **Heroku** (full-stack) | ✅ `heroku-postbuild` hook |
+| **Docker** | 🚧 Coming in v1.2 |
+| **Kubernetes** | 🚧 On the roadmap |
+
+For a production build:
+
+```bash
+npm run build && npm start
+```
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Add unit and integration test suites for server routes
-- [ ] Add end-to-end tests with Cypress for the React client
-- [ ] Implement telemedicine video consultations
-- [ ] Add wearable / IoT health-device integration
-- [ ] Build native mobile apps (React Native)
-- [ ] Introduce predictive analytics with ML models
-- [ ] Containerise with Docker and add Kubernetes manifests
-- [ ] Set up staging and production CI/CD pipelines
+- [x] Core MERN scaffolding & role-based authentication
+- [x] Appointment booking, prescriptions, and SOS
+- [x] Analytics dashboard & inventory module
+- [x] AI chatbot integration (Gemini / OpenAI)
+- [ ] Comprehensive unit + integration test coverage
+- [ ] End-to-end test suite with Cypress / Playwright
+- [ ] Telemedicine video consultations (WebRTC)
+- [ ] Wearable & IoT health-device integration
+- [ ] React Native mobile applications
+- [ ] Predictive analytics & ML-driven triage
+- [ ] Docker images + Kubernetes manifests
+- [ ] Staging & production CI/CD pipelines
+
+See the [open issues](https://github.com/mightbeanshuu/DormDoc/issues) for a live list.
+
+---
+
+## 🤝 Contributing
+
+Contributions are what make open source thrive — every bug fix, feature, doc improvement, or suggestion is welcomed and appreciated.
+
+1. **Fork** the project
+2. **Create** your feature branch (`git checkout -b feat/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'feat: add amazing feature'`)
+4. **Push** to your branch (`git push origin feat/amazing-feature`)
+5. **Open** a Pull Request
+
+Please review the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before opening a PR.
+
+---
+
+## 🛡️ Security
+
+If you discover a security vulnerability, please **do not** open a public issue. Instead, follow the disclosure process outlined in [`SECURITY.md`](SECURITY.md). Reports are triaged within 48 hours.
 
 ---
 
 ## 📄 License
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full text.
+
+```
+Copyright (c) 2026 DormDoc Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction...
+```
 
 ---
 
-## 🙏 Acknowledgements & credits
+## 🙏 Acknowledgements
 
-- [React](https://react.dev/) — UI framework
-- [Express](https://expressjs.com/) — Backend framework
-- [MongoDB](https://www.mongodb.com/) — Database
-- [Material-UI](https://mui.com/) — Component library
-- [Socket.io](https://socket.io/) — Real-time communication
-- [Recharts](https://recharts.org/) — Charting library
-- [Clerk](https://clerk.com/) — Authentication provider
-- **BIT Mesra Administration** — For supporting the initiative
-- **Medical staff** — For providing domain expertise
-- **Student contributors** — For feedback and testing
+Standing on the shoulders of giants — sincere thanks to the maintainers of:
+
+<div align="center">
+
+[React](https://react.dev/) · [Express](https://expressjs.com/) · [MongoDB](https://www.mongodb.com/) · [Material-UI](https://mui.com/) · [Socket.io](https://socket.io/) · [Recharts](https://recharts.org/) · [Mongoose](https://mongoosejs.com/) · [JWT](https://jwt.io/) · [Helmet](https://helmetjs.github.io/)
+
+And to every contributor, tester, and end-user whose feedback shaped this platform.
+
+</div>
+
+---
+
+<div align="center">
+
+### ⭐ If this project helped you, consider giving it a star — it keeps the lights on.
+
+<sub>Built with ❤️  and a lot of coffee.</sub>
+
+</div>
