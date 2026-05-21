@@ -38,6 +38,7 @@ import {
   Security,
   ArrowBack,
   ArrowForward,
+  Insights,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useClerkAuth } from '../../contexts/ClerkAuthContext';
@@ -127,6 +128,7 @@ const Layout = ({ children }) => {
         { text: 'Leave Requests', icon: <Assignment />, path: '/leave-requests' },
         { text: 'QR Scanner', icon: <QrCodeScanner />, path: '/qr-scanner' },
         { text: 'Login Info', icon: <Security />, path: '/login-info' },
+        { text: 'Admin Analytics', icon: <Insights />, path: '/admin-analytics' },
         { text: 'Profile', icon: <Person />, path: '/profile' },
       ];
     }
