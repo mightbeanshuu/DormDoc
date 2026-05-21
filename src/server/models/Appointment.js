@@ -131,6 +131,10 @@ appointmentSchema.index({ doctor: 1, appointmentDate: 1 });
 appointmentSchema.index({ status: 1, appointmentDate: 1 });
 appointmentSchema.index({ priority: -1, appointmentDate: 1 });
 
+// Indexes for admin analytics
+appointmentSchema.index({ 'leaveRequest.requested': 1, 'leaveRequest.status': 1, createdAt: 1 });
+appointmentSchema.index({ isEmergency: 1, createdAt: 1 });
+
 // Virtual for calculating total consultation time
 appointmentSchema.virtual('consultationDuration').get(function() {
   if (this.checkInTime && this.checkOutTime) {

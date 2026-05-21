@@ -127,6 +127,7 @@ const Layout = ({ children }) => {
         { text: 'Leave Requests', icon: <Assignment />, path: '/leave-requests' },
         { text: 'QR Scanner', icon: <QrCodeScanner />, path: '/qr-scanner' },
         { text: 'Login Info', icon: <Security />, path: '/login-info' },
+        { text: 'Admin Analytics', icon: <Analytics />, path: '/admin-analytics' },
         { text: 'Profile', icon: <Person />, path: '/profile' },
       ];
     }
