@@ -6,7 +6,6 @@ import {
   Tab,
   CircularProgress,
   Alert,
-  Button,
   IconButton,
   Tooltip,
 } from '@mui/material';
