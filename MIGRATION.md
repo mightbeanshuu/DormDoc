@@ -18,26 +18,29 @@ All migration work lives on `feat/supabase-migration`. `main` stays untouched un
 
 ---
 
-## Phase 0 — Foundation *(1–2 days)*
+## Phase 0 — Foundation *(1–2 days)* — **DONE except final link**
 
 ### Block 0.1: Accounts & projects
-- [ ] Create Supabase account at supabase.com
-- [ ] Create project `dormdoc-staging` (region `ap-south-1` Mumbai)
-- [ ] Save anon key, service-role key, JWT secret in `.env.local` (NOT committed)
-- [ ] (Optional) Create `dormdoc-prod` for later cutover
+- [x] Supabase project `Dorm Doc` created (ref **wlkwirmormsspyxgkfqg**, region `ap-northeast-1` Tokyo, free tier)
+- [x] anon + service_role + JWT secret saved in `.env.local` (gitignored)
+- [ ] Rotate service_role (deferred — was pasted in chat, user accepted risk)
+- [ ] (Later) Create `dormdoc-prod` for cutover
 
 ### Block 0.2: Local dev environment
-- [ ] Install Docker Desktop for Mac
-- [ ] `npx supabase init` → scaffolds `supabase/` folder
-- [ ] `npx supabase login`
-- [ ] `npx supabase link --project-ref <ref>`
-- [ ] `npx supabase start` → verify Postgres + Auth + Storage run locally
+- [x] Install Docker engine — used **colima** (lightweight, no admin password) instead of Docker Desktop
+- [x] `npx supabase init` → `supabase/config.toml` committed
+- [x] `npx supabase login` (user ran interactively)
+- [ ] `npx supabase link --project-ref wlkwirmormsspyxgkfqg` ← **next**
+- [ ] `npx supabase start` (optional — only needed for local stack work)
 
-### Block 0.3: Branch + envs
-- [x] Create `feat/supabase-migration` branch
-- [ ] Add Supabase env vars to `.env.example`
-- [ ] Install `@supabase/supabase-js` in client + server
-- [ ] Install Supabase CLI as devDependency (done — v2.101.0)
+### Block 0.3: Branch + envs + MCP
+- [x] Branch `feat/supabase-migration` created and pushed
+- [x] Supabase env vars in `.env.example`
+- [x] `@supabase/supabase-js` installed (root + src/client)
+- [x] Supabase CLI v2.101.0 as devDependency
+- [x] Supabase MCP server registered (`.mcp.json` committed, activates on Claude Code restart)
+
+**PR open:** [#12 — Phase 0: Supabase migration plan + scaffolding](https://github.com/mightbeanshuu/DormDoc/pull/12)
 
 **Deliverable:** local Supabase running, repo wired, branch ready. No functional change yet.
 
