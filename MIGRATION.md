@@ -48,19 +48,24 @@ All migration work lives on `feat/supabase-migration`. `main` stays untouched un
 
 ## Phase 1 — Schema Design *(3–5 days)*
 
-### Block 1.1: Map Mongoose → Postgres tables
+### Block 1.1: Map Mongoose → Postgres tables — **DONE**
 
-| Mongoose model | Postgres table | Notes |
+Full mapping lives in **[`docs/schema-mapping.md`](docs/schema-mapping.md)**. Summary:
+
+| Mongoose model | Postgres table(s) | Notes |
 |---|---|---|
-| User | `profiles` (extends `auth.users`) | Supabase Auth owns `auth.users`; `profiles` 1:1 |
-| Student, Faculty, Parent, Doctor, DispensaryStaff | `profiles` + role-specific tables | Separate tables per role for clean RLS |
+| User + Student | `profiles` + `students` (merged) | legacy `User` collection consolidated into `students`; one row per student in both |
+| Faculty | `profiles` + `faculty` | HODs = faculty with `profiles.role='hod'` + `hod_department` set |
+| Parent | `profiles` + `parents` + `parent_student_links` | M:N parent↔student via link table |
+| Doctor + DispensaryStaff | `profiles` + `dispensary_staff` (merged) + `staff_availability` | `Doctor` merged in as `staff_type='medical_officer'`; per-day availability as child table |
 | OTP | **deleted** | Supabase Auth handles natively |
-| Prescription | `prescriptions` | FK → patient, doctor |
-| Appointment | `appointments` | FK → student, doctor, slot |
-| InventoryItem | `inventory_items` | |
-| Ambulance, AmbulanceTrip | `ambulances`, `ambulance_trips` | trips FK → ambulance + driver |
-| LeaveDecision | `leave_decisions` | |
-| LoginLog | `login_logs` OR Supabase audit | decide later |
+| Prescription | `prescriptions` + `prescription_medications` | medications extracted from embedded array |
+| Appointment | `appointments` + `leave_requests` | `leaveRequest` subdoc extracted; embedded `prescription` blob removed (use `prescriptions.appointment_id` FK) |
+| InventoryItem | `inventory_items` | 1:1 |
+| Ambulance | `ambulances` + `ambulance_equipment` + `ambulance_maintenance_issues` | embedded arrays split out; `currentAssignment` removed (derived from trips) |
+| AmbulanceTrip | `ambulance_trips` + `ambulance_trip_status_log` | status history extracted, drives realtime feed |
+| LeaveDecision | `leave_decisions` | immutable audit (RLS denies UPDATE/DELETE) |
+| LoginLog | `login_logs` | `location`/`device` subdocs flattened to columns |
 
 ### Block 1.2: Define enums + relations
 - [ ] `user_role` enum: `student | doctor | hod | admin | parent | dispensary_staff | faculty`
