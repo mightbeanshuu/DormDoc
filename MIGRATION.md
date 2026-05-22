@@ -67,16 +67,22 @@ Full mapping lives in **[`docs/schema-mapping.md`](docs/schema-mapping.md)**. Su
 | LeaveDecision | `leave_decisions` | immutable audit (RLS denies UPDATE/DELETE) |
 | LoginLog | `login_logs` | `location`/`device` subdocs flattened to columns |
 
-### Block 1.2: Define enums + relations
-- [ ] `user_role` enum: `student | doctor | hod | admin | parent | dispensary_staff | faculty`
-- [ ] `prescription_status` enum
-- [ ] `appointment_status` enum
-- [ ] FK relationships with explicit `ON DELETE` per table
+### Block 1.2: Define enums + relations — **DONE**
 
-### Block 1.3: Initial migrations
-- [ ] `npx supabase migration new init_schema`
-- [ ] Write SQL per logical group (auth/profiles, clinical, inventory, ambulance, logs)
-- [ ] Apply locally + sample inserts
+Full enum list + FK `ON DELETE` matrix in **[`docs/enums-and-fks.md`](docs/enums-and-fks.md)**. 23 enum types, FK policy summary: `CASCADE` for profile/role chain and embedded children; `RESTRICT` for clinical (students→prescriptions/appointments) and dispatch (ambulance→trips) to block accidental data loss; `SET NULL` for "actor" FKs (doctor/driver/decider/updated_by) with denormalized name columns so audit survives staff turnover.
+
+### Block 1.3: Initial migrations — **DONE (files written, not yet applied)**
+
+Six migration files in `supabase/migrations/` covering the full schema, in dependency order. RLS is enabled default-deny on every table; policies land in 1.4.
+
+- [x] `20260523120000_init_extensions_and_enums.sql` — pgcrypto + citext + 23 enum types + `set_updated_at()` function
+- [x] `20260523120001_init_profiles_and_roles.sql` — profiles, students, faculty, parents, dispensary_staff, parent_student_links, staff_availability, medical_history + `auth.users → profiles` trigger
+- [x] `20260523120002_init_clinical.sql` — appointments, leave_requests, prescriptions, prescription_medications
+- [x] `20260523120003_init_inventory.sql` — inventory_items
+- [x] `20260523120004_init_ambulance.sql` — ambulances, equipment, maintenance_issues, trips, status_log
+- [x] `20260523120005_init_audit_logs.sql` — leave_decisions, login_logs (append-only, no `updated_at`)
+- [ ] Apply with `npx supabase db push` (deferred — pending Supabase MCP reconnect for live validation)
+- [ ] Sample inserts (deferred to 1.4 alongside RLS policy testing)
 
 ### Block 1.4: RLS policy skeleton
 - [ ] Enable RLS on every table (default-deny)
