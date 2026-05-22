@@ -107,6 +107,7 @@ app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/ambulance-tracking', ambulanceTrackingRoutes);
 app.use('/api/hod', require('./routes/hod'));
+app.use('/api/admin/analytics', require('./routes/adminAnalytics.routes'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

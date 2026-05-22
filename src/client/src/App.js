@@ -37,6 +37,7 @@ import AmbulanceTracking from './pages/Admin/AmbulanceTracking';
 import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import PatientChat from './pages/Doctor/PatientChat';
 import LoginInfo from './pages/Admin/LoginInfo';
+import AnalyticsDashboard from './pages/Admin/Analytics/AnalyticsDashboard';
 import Onboarding from './pages/Auth/Onboarding';
 import RoleRoute from './components/Auth/RoleRoute';
 import LeaveApprovals from './pages/HOD/LeaveApprovals';
@@ -179,6 +180,7 @@ function App() {
                           <Route path="leave-requests" element={<LeaveRequests />} />
                           <Route path="qr-scanner" element={<QRScanner />} />
                           <Route path="login-info" element={<LoginInfo />} />
+                          <Route path="admin-analytics" element={<AnalyticsDashboard />} />
                           
                           {/* Doctor Routes */}
                           <Route path="doctor-dashboard" element={<DoctorDashboard />} />
