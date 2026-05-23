@@ -1,143 +1,165 @@
 const express = require('express');
+const { authenticateToken, requireRole } = require('../middleware/auth');
+const { supabaseAdmin } = require('../db/supabase');
+
 const router = express.Router();
-const User = require('../models/User');
-const LoginLog = require('../models/LoginLog');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
-// Middleware to verify admin access
-const verifyAdmin = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
-    }
+router.use(authenticateToken);
+router.use(requireRole(['admin']));
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-    
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
+// ─── helpers ────────────────────────────────────────────────────────────────
 
-    req.user = user;
-    next();
-  } catch (error) {
-    res.status(401).json({ message: 'Invalid token' });
-  }
+const PROFILE_FIELDS = 'id, role, name, email, phone, is_active, last_login_at, created_at';
+const ROLE_VALUES = new Set(['student', 'doctor', 'hod', 'admin', 'parent', 'dispensary_staff', 'faculty']);
+
+const escapeLike = (s) => String(s || '').replace(/([%_\\,()])/g, '\\$1');
+
+const normalizeIp = (ip) => {
+  if (!ip) return '0.0.0.0';
+  if (ip.startsWith('::ffff:')) return ip.slice(7);
+  if (ip === '::1') return '127.0.0.1';
+  return ip;
 };
 
-// Apply admin middleware to all routes
-router.use(verifyAdmin);
+const toClientLog = (log, userMap = {}) => ({
+  _id: log.id,
+  userId: log.user_id,
+  email: log.email,
+  action: log.action,
+  ipAddress: log.ip_address,
+  userAgent: log.user_agent,
+  status: log.status,
+  reason: log.reason,
+  timestamp: log.created_at,
+  user: log.user_id ? userMap[log.user_id] || null : null,
+});
 
-// Get all login information
+const toClientUser = (profile, studentRow, facultyRow, staffRow) => ({
+  _id: profile.id,
+  id: profile.id,
+  name: profile.name,
+  email: profile.email,
+  role: profile.role,
+  phone: profile.phone,
+  isActive: profile.is_active,
+  lastLogin: profile.last_login_at,
+  createdAt: profile.created_at,
+  studentId: studentRow?.student_id || facultyRow?.faculty_id || staffRow?.staff_id || null,
+  department: studentRow?.department || facultyRow?.department || null,
+  year: studentRow?.year || null,
+  bloodGroup: studentRow?.blood_group || facultyRow?.blood_group || staffRow?.blood_group || null,
+  emergencyContact:
+    studentRow?.emergency_contact || facultyRow?.emergency_contact || staffRow?.emergency_contact || null,
+});
+
+async function hydrateUsers(sb, userIds) {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (!unique.length) return {};
+
+  const [{ data: profiles }, { data: students }, { data: faculty }, { data: staff }] = await Promise.all([
+    sb.from('profiles').select(PROFILE_FIELDS).in('id', unique),
+    sb.from('students').select('id, student_id, department, year, blood_group, emergency_contact').in('id', unique),
+    sb.from('faculty').select('id, faculty_id, department, blood_group, emergency_contact').in('id', unique),
+    sb.from('dispensary_staff').select('id, staff_id, blood_group, emergency_contact').in('id', unique),
+  ]);
+
+  const studentMap = Object.fromEntries((students || []).map((r) => [r.id, r]));
+  const facultyMap = Object.fromEntries((faculty || []).map((r) => [r.id, r]));
+  const staffMap = Object.fromEntries((staff || []).map((r) => [r.id, r]));
+
+  return Object.fromEntries(
+    (profiles || []).map((p) => [p.id, toClientUser(p, studentMap[p.id], facultyMap[p.id], staffMap[p.id])])
+  );
+}
+
+async function resolveUserIdsForSearch(sb, { search, role }) {
+  let restrict = null;
+
+  if (role && role !== 'all' && ROLE_VALUES.has(role)) {
+    const { data } = await sb.from('profiles').select('id').eq('role', role);
+    restrict = new Set((data || []).map((r) => r.id));
+  }
+
+  if (search) {
+    const term = `%${escapeLike(search)}%`;
+    const [{ data: matchedProfiles }, { data: matchedStudents }, { data: matchedFaculty }, { data: matchedStaff }] =
+      await Promise.all([
+        sb.from('profiles').select('id').or(`name.ilike.${term},email.ilike.${term}`),
+        sb.from('students').select('id').ilike('student_id', term),
+        sb.from('faculty').select('id').ilike('faculty_id', term),
+        sb.from('dispensary_staff').select('id').ilike('staff_id', term),
+      ]);
+    const searchIds = new Set([
+      ...(matchedProfiles || []).map((r) => r.id),
+      ...(matchedStudents || []).map((r) => r.id),
+      ...(matchedFaculty || []).map((r) => r.id),
+      ...(matchedStaff || []).map((r) => r.id),
+    ]);
+    restrict = restrict ? new Set([...restrict].filter((id) => searchIds.has(id))) : searchIds;
+  }
+
+  return restrict; // null = no restriction; Set of UUIDs otherwise
+}
+
+async function logAuditEvent(sb, { userId, email, action, status = 'success', reason, req }) {
+  const { error } = await sb.from('login_logs').insert({
+    user_id: userId || null,
+    email,
+    action,
+    ip_address: normalizeIp(req.ip),
+    user_agent: req.get('User-Agent') || 'unknown',
+    status,
+    reason: reason || null,
+  });
+  if (error) console.error('Audit log write failed:', error);
+}
+
+// ─── routes ─────────────────────────────────────────────────────────────────
+
 router.get('/login-info', async (req, res) => {
   try {
-    const { page = 1, limit = 50, search, role, status } = req.query;
-    const skip = (page - 1) * limit;
+    const sb = req.sb;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = (page - 1) * limit;
+    const { search, role, status } = req.query;
 
-    // Build filter object
-    const filter = {};
-    if (search) {
-      filter.$or = [
-        { 'user.name': { $regex: search, $options: 'i' } },
-        { 'user.email': { $regex: search, $options: 'i' } },
-        { 'user.studentId': { $regex: search, $options: 'i' } },
-        { ipAddress: { $regex: search, $options: 'i' } },
-      ];
-    }
-    if (role && role !== 'all') {
-      filter['user.role'] = role;
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
+    const restrictUserIds = await resolveUserIdsForSearch(sb, { search, role });
+    if (restrictUserIds && restrictUserIds.size === 0 && !search) {
+      return res.json({ loginInfo: [], totalCount: 0, currentPage: page, totalPages: 0 });
     }
 
-    // Get login information with user details
-    const loginInfo = await LoginLog.aggregate([
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user'
+    let query = sb.from('login_logs').select('*', { count: 'exact' });
+    if (status && status !== 'all') query = query.eq('status', status);
+
+    if (restrictUserIds !== null) {
+      const idList = [...restrictUserIds];
+      if (search) {
+        // Match by user_id OR by raw email on the log row (covers failed-login attempts where user_id is null)
+        const term = `%${escapeLike(search)}%`;
+        if (idList.length) {
+          query = query.or(`user_id.in.(${idList.join(',')}),email.ilike.${term}`);
+        } else {
+          query = query.ilike('email', term);
         }
-      },
-      {
-        $unwind: {
-          path: '$user',
-          preserveNullAndEmptyArrays: true
-        }
-      },
-      {
-        $match: filter
-      },
-      {
-        $sort: { timestamp: -1 }
-      },
-      {
-        $skip: skip
-      },
-      {
-        $limit: parseInt(limit)
-      },
-      {
-        $project: {
-          _id: 1,
-          userId: 1,
-          email: 1,
-          action: 1,
-          ipAddress: 1,
-          userAgent: 1,
-          status: 1,
-          reason: 1,
-          timestamp: 1,
-          'user._id': 1,
-          'user.name': 1,
-          'user.email': 1,
-          'user.role': 1,
-          'user.studentId': 1,
-          'user.department': 1,
-          'user.year': 1,
-          'user.phone': 1,
-          'user.bloodGroup': 1,
-          'user.emergencyContact': 1,
-          'user.lastLogin': 1,
-          'user.loginCount': 1,
-          'user.isActive': 1,
-        }
+      } else if (idList.length) {
+        query = query.in('user_id', idList);
       }
-    ]);
+    }
 
-    // Get total count for pagination
-    const totalCount = await LoginLog.aggregate([
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user'
-        }
-      },
-      {
-        $unwind: {
-          path: '$user',
-          preserveNullAndEmptyArrays: true
-        }
-      },
-      {
-        $match: filter
-      },
-      {
-        $count: 'total'
-      }
-    ]);
+    const { data: logs, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    const userMap = await hydrateUsers(sb, (logs || []).map((l) => l.user_id));
 
     res.json({
-      loginInfo,
-      totalCount: totalCount[0]?.total || 0,
-      currentPage: parseInt(page),
-      totalPages: Math.ceil((totalCount[0]?.total || 0) / limit),
+      loginInfo: (logs || []).map((l) => toClientLog(l, userMap)),
+      totalCount: count || 0,
+      currentPage: page,
+      totalPages: Math.ceil((count || 0) / limit),
     });
   } catch (error) {
     console.error('Get login info error:', error);
@@ -145,97 +167,169 @@ router.get('/login-info', async (req, res) => {
   }
 });
 
-// Get login statistics
 router.get('/login-statistics', async (req, res) => {
   try {
-    const statistics = await LoginLog.getLoginStatistics();
-    res.json(statistics);
+    const sb = req.sb;
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const startIso = startOfDay.toISOString();
+
+    const [
+      totalUsersRes,
+      lockedUsersRes,
+      todayLoginsRes,
+      failedTodayRes,
+      recentLoginsRes,
+    ] = await Promise.all([
+      sb.from('profiles').select('id', { count: 'exact', head: true }),
+      sb.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', false),
+      sb
+        .from('login_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('action', 'login')
+        .eq('status', 'success')
+        .gte('created_at', startIso),
+      sb
+        .from('login_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'failed')
+        .gte('created_at', startIso),
+      sb
+        .from('login_logs')
+        .select('*')
+        .eq('action', 'login')
+        .eq('status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]);
+
+    const recentLogs = recentLoginsRes.data || [];
+    const userMap = await hydrateUsers(sb, recentLogs.map((l) => l.user_id));
+
+    res.json({
+      totalUsers: totalUsersRes.count || 0,
+      activeUsers: todayLoginsRes.count || 0,
+      lockedUsers: lockedUsersRes.count || 0,
+      todayLogins: todayLoginsRes.count || 0,
+      failedLogins: failedTodayRes.count || 0,
+      recentLogins: recentLogs.map((l) => toClientLog(l, userMap)),
+    });
   } catch (error) {
     console.error('Get login statistics error:', error);
     res.status(500).json({ message: 'Failed to fetch login statistics' });
   }
 });
 
-// Get recent logins
 router.get('/recent-logins', async (req, res) => {
   try {
-    const { limit = 20 } = req.query;
-    const recentLogins = await LoginLog.find({
-      action: 'login',
-      status: 'success'
-    })
-    .sort({ timestamp: -1 })
-    .limit(parseInt(limit))
-    .populate('userId', 'name email role studentId')
-    .select('userId email ipAddress userAgent timestamp');
+    const sb = req.sb;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
 
-    res.json(recentLogins);
+    const { data: logs, error } = await sb
+      .from('login_logs')
+      .select('*')
+      .eq('action', 'login')
+      .eq('status', 'success')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    const userMap = await hydrateUsers(sb, (logs || []).map((l) => l.user_id));
+    res.json((logs || []).map((l) => toClientLog(l, userMap)));
   } catch (error) {
     console.error('Get recent logins error:', error);
     res.status(500).json({ message: 'Failed to fetch recent logins' });
   }
 });
 
-// Get suspicious login attempts
 router.get('/suspicious-logins', async (req, res) => {
   try {
-    const suspiciousLogins = await LoginLog.getSuspiciousLogins();
-    res.json(suspiciousLogins);
+    const sb = req.sb;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // PostgREST can't group_by. Pull failed attempts from last 24h and bucket in node.
+    const { data: failed, error } = await sb
+      .from('login_logs')
+      .select('*')
+      .eq('status', 'failed')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    if (error) throw error;
+
+    const buckets = new Map();
+    for (const row of failed || []) {
+      const key = String(row.ip_address);
+      if (!buckets.has(key)) buckets.set(key, { _id: key, count: 0, attempts: [] });
+      const bucket = buckets.get(key);
+      bucket.count += 1;
+      bucket.attempts.push(row);
+    }
+
+    const suspicious = [...buckets.values()]
+      .filter((b) => b.count >= 5)
+      .sort((a, b) => b.count - a.count);
+
+    res.json(suspicious);
   } catch (error) {
     console.error('Get suspicious logins error:', error);
     res.status(500).json({ message: 'Failed to fetch suspicious logins' });
   }
 });
 
-// Get user login history
 router.get('/user-login-history/:userId', async (req, res) => {
   try {
+    const sb = req.sb;
     const { userId } = req.params;
-    const { limit = 50 } = req.query;
-    
-    const loginHistory = await LoginLog.getUserLoginHistory(userId, parseInt(limit));
-    res.json(loginHistory);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+
+    const { data: logs, error } = await sb
+      .from('login_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    const userMap = await hydrateUsers(sb, [userId]);
+    res.json((logs || []).map((l) => toClientLog(l, userMap)));
   } catch (error) {
     console.error('Get user login history error:', error);
     res.status(500).json({ message: 'Failed to fetch user login history' });
   }
 });
 
-// Reset user password
 router.post('/reset-password', async (req, res) => {
   try {
+    const sb = req.sb;
     const { userId, newPassword } = req.body;
 
     if (!userId || !newPassword) {
       return res.status(400).json({ message: 'User ID and new password are required' });
     }
-
     if (newPassword.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    // Find user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    const { data: profile } = await sb.from('profiles').select('id, email').eq('id', userId).maybeSingle();
+    if (!profile) return res.status(404).json({ message: 'User not found' });
+
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
+    if (updateErr) {
+      console.error('Auth password update failed:', updateErr);
+      return res.status(500).json({ message: 'Failed to reset password' });
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    user.password = hashedPassword;
-    await user.save();
-
-    // Log password reset by admin
-    const loginLog = new LoginLog({
-      userId: user._id,
-      email: user.email,
+    await logAuditEvent(sb, {
+      userId,
+      email: profile.email,
       action: 'password_reset',
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      status: 'success',
       reason: 'Reset by admin',
+      req,
     });
-    await loginLog.save();
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
@@ -244,45 +338,37 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// Toggle user status (lock/unlock)
 router.post('/toggle-user-status', async (req, res) => {
   try {
+    const sb = req.sb;
     const { userId, action } = req.body;
 
     if (!userId || !action) {
       return res.status(400).json({ message: 'User ID and action are required' });
     }
-
     if (!['lock', 'unlock'].includes(action)) {
       return res.status(400).json({ message: 'Action must be either lock or unlock' });
     }
 
-    // Find user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    const { data: profile } = await sb.from('profiles').select('id, email, role').eq('id', userId).maybeSingle();
+    if (!profile) return res.status(404).json({ message: 'User not found' });
+    if (profile.role === 'admin' && action === 'lock') {
+      return res.status(403).json({ message: 'Cannot lock admin users' });
     }
 
-    // Update user status
-    user.isActive = action === 'unlock';
-    await user.save();
+    const isActive = action === 'unlock';
+    const { error: updateErr } = await sb.from('profiles').update({ is_active: isActive }).eq('id', userId);
+    if (updateErr) throw updateErr;
 
-    // Log status change
-    const loginLog = new LoginLog({
-      userId: user._id,
-      email: user.email,
+    await logAuditEvent(sb, {
+      userId,
+      email: profile.email,
       action: action === 'lock' ? 'account_lock' : 'account_unlock',
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      status: 'success',
       reason: `Account ${action}ed by admin`,
+      req,
     });
-    await loginLog.save();
 
-    res.json({ 
-      message: `User ${action}ed successfully`,
-      isActive: user.isActive
-    });
+    res.json({ message: `User ${action}ed successfully`, isActive });
   } catch (error) {
     console.error('Toggle user status error:', error);
     res.status(500).json({ message: 'Failed to toggle user status' });
@@ -292,46 +378,53 @@ router.post('/toggle-user-status', async (req, res) => {
 // OTP statistics endpoint removed in Phase 2 — OTP is now handled by Supabase
 // Auth (no longer queryable from our DB). Track via Supabase dashboard logs.
 router.get('/otp-statistics', (req, res) => {
-  res.status(410).json({
-    message: 'OTP statistics moved — see Supabase Auth logs.',
-  });
+  res.status(410).json({ message: 'OTP statistics moved — see Supabase Auth logs.' });
 });
 
-// Get all users with login information
 router.get('/users', async (req, res) => {
   try {
-    const { page = 1, limit = 50, search, role, status } = req.query;
-    const skip = (page - 1) * limit;
+    const sb = req.sb;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = (page - 1) * limit;
+    const { search, role, status } = req.query;
 
-    // Build filter object
-    const filter = {};
+    let query = sb.from('profiles').select(PROFILE_FIELDS, { count: 'exact' });
+
+    if (role && role !== 'all' && ROLE_VALUES.has(role)) query = query.eq('role', role);
+    if (status && status !== 'all') query = query.eq('is_active', status === 'active');
+
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { studentId: { $regex: search, $options: 'i' } },
+      const term = `%${escapeLike(search)}%`;
+      // For studentId search we need to prefetch matching ids from role-specific tables
+      const [{ data: matchedStudents }, { data: matchedFaculty }, { data: matchedStaff }] = await Promise.all([
+        sb.from('students').select('id').ilike('student_id', term),
+        sb.from('faculty').select('id').ilike('faculty_id', term),
+        sb.from('dispensary_staff').select('id').ilike('staff_id', term),
+      ]);
+      const idList = [
+        ...(matchedStudents || []).map((r) => r.id),
+        ...(matchedFaculty || []).map((r) => r.id),
+        ...(matchedStaff || []).map((r) => r.id),
       ];
-    }
-    if (role && role !== 'all') {
-      filter.role = role;
-    }
-    if (status && status !== 'all') {
-      filter.isActive = status === 'active';
+      const idsClause = idList.length ? `,id.in.(${idList.join(',')})` : '';
+      query = query.or(`name.ilike.${term},email.ilike.${term}${idsClause}`);
     }
 
-    const users = await User.find(filter)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    const { data: profiles, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    const totalCount = await User.countDocuments(filter);
+    if (error) throw error;
+
+    const userMap = await hydrateUsers(sb, (profiles || []).map((p) => p.id));
+    const users = (profiles || []).map((p) => userMap[p.id]).filter(Boolean);
 
     res.json({
       users,
-      totalCount,
-      currentPage: parseInt(page),
-      totalPages: Math.ceil(totalCount / limit),
+      totalCount: count || 0,
+      currentPage: page,
+      totalPages: Math.ceil((count || 0) / limit),
     });
   } catch (error) {
     console.error('Get users error:', error);
@@ -339,35 +432,28 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// Delete user
 router.delete('/users/:userId', async (req, res) => {
   try {
+    const sb = req.sb;
     const { userId } = req.params;
 
-    // Find user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    const { data: profile } = await sb.from('profiles').select('id, email, role').eq('id', userId).maybeSingle();
+    if (!profile) return res.status(404).json({ message: 'User not found' });
+    if (profile.role === 'admin') return res.status(403).json({ message: 'Cannot delete admin users' });
+
+    const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (deleteErr) {
+      console.error('Auth user delete failed:', deleteErr);
+      return res.status(500).json({ message: 'Failed to delete user' });
     }
 
-    // Don't allow deleting admin users
-    if (user.role === 'admin') {
-      return res.status(403).json({ message: 'Cannot delete admin users' });
-    }
-
-    // Delete user
-    await User.findByIdAndDelete(userId);
-
-    // Log user deletion
-    const loginLog = new LoginLog({
-      email: user.email,
-      action: 'user_deletion',
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      status: 'success',
+    await logAuditEvent(sb, {
+      userId: null,
+      email: profile.email,
+      action: 'account_lock',
       reason: 'User deleted by admin',
+      req,
     });
-    await loginLog.save();
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -376,45 +462,48 @@ router.delete('/users/:userId', async (req, res) => {
   }
 });
 
-// Export login data
 router.get('/export-login-data', async (req, res) => {
   try {
+    const sb = req.sb;
     const { format = 'csv', startDate, endDate } = req.query;
-    
-    // Build date filter
-    const dateFilter = {};
-    if (startDate) {
-      dateFilter.timestamp = { $gte: new Date(startDate) };
-    }
-    if (endDate) {
-      dateFilter.timestamp = { ...dateFilter.timestamp, $lte: new Date(endDate) };
-    }
 
-    const loginData = await LoginLog.find(dateFilter)
-      .populate('userId', 'name email role studentId')
-      .sort({ timestamp: -1 });
+    let query = sb.from('login_logs').select('*').order('created_at', { ascending: false }).limit(10000);
+    if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
+    if (endDate) query = query.lte('created_at', new Date(endDate).toISOString());
+
+    const { data: logs, error } = await query;
+    if (error) throw error;
+
+    const userMap = await hydrateUsers(sb, (logs || []).map((l) => l.user_id));
 
     if (format === 'csv') {
-      const csvData = [
+      const csvEscape = (v) => {
+        const s = v == null ? '' : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const rows = [
         ['Timestamp', 'User', 'Email', 'Role', 'Action', 'IP Address', 'Status', 'Reason'],
-        ...loginData.map(log => [
-          log.timestamp.toISOString(),
-          log.userId?.name || 'N/A',
-          log.email,
-          log.userId?.role || 'N/A',
-          log.action,
-          log.ipAddress,
-          log.status,
-          log.reason || 'N/A',
-        ])
-      ].map(row => row.join(',')).join('\n');
-
+        ...(logs || []).map((log) => {
+          const u = log.user_id ? userMap[log.user_id] : null;
+          return [
+            log.created_at,
+            u?.name || 'N/A',
+            log.email,
+            u?.role || 'N/A',
+            log.action,
+            log.ip_address,
+            log.status,
+            log.reason || 'N/A',
+          ];
+        }),
+      ];
+      const csvData = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=login-data.csv');
-      res.send(csvData);
-    } else {
-      res.json(loginData);
+      return res.send(csvData);
     }
+
+    res.json((logs || []).map((l) => toClientLog(l, userMap)));
   } catch (error) {
     console.error('Export login data error:', error);
     res.status(500).json({ message: 'Failed to export login data' });
