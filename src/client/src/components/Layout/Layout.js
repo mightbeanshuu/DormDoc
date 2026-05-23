@@ -41,7 +41,7 @@ import {
   Insights,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useClerkAuth } from '../../contexts/ClerkAuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { palette } from '../../theme';
 import CollegeHeader from './CollegeHeader';
 import CollegeFooter from './CollegeFooter';
@@ -59,7 +59,7 @@ const ROLE_LABEL = {
 const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-  const { user, logout } = useClerkAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
