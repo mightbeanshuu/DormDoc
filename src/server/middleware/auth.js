@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { supabaseAdmin } = require('../db/supabase');
+const { supabaseAdmin, supabaseForUser } = require('../db/supabase');
 
 const DEV_STUDENT_UUID = '00000000-0000-0000-0000-000000000001';
 const DEV_HOD_UUID = '00000000-0000-0000-0000-000000000002';
@@ -104,6 +104,7 @@ const authenticateToken = async (req, res, next) => {
     if (!token) {
       if (isDev) {
         req.user = devStudentUser;
+        req.sb = supabaseAdmin;
         return next();
       }
       return res.status(401).json({ message: 'Access token required' });
@@ -111,10 +112,12 @@ const authenticateToken = async (req, res, next) => {
 
     if (isDev && token === 'dev_token') {
       req.user = devStudentUser;
+      req.sb = supabaseAdmin;
       return next();
     }
     if (isDev && token === 'hod_dev_token') {
       req.user = devHodUser;
+      req.sb = supabaseAdmin;
       return next();
     }
 
@@ -126,6 +129,7 @@ const authenticateToken = async (req, res, next) => {
 
     req.user = user;
     req.accessToken = token;
+    req.sb = supabaseForUser(token);
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -173,6 +177,7 @@ const optionalAuth = async (req, res, next) => {
       if (user && !user.inactive) {
         req.user = user;
         req.accessToken = token;
+        req.sb = supabaseForUser(token);
       }
     }
     next();
