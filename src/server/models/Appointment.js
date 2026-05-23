@@ -130,6 +130,8 @@ appointmentSchema.index({ student: 1, appointmentDate: 1 });
 appointmentSchema.index({ doctor: 1, appointmentDate: 1 });
 appointmentSchema.index({ status: 1, appointmentDate: 1 });
 appointmentSchema.index({ priority: -1, appointmentDate: 1 });
+appointmentSchema.index({ isEmergency: 1, appointmentDate: 1 });
+appointmentSchema.index({ 'leaveRequest.requested': 1, 'leaveRequest.status': 1 });
 
 // Virtual for calculating total consultation time
 appointmentSchema.virtual('consultationDuration').get(function() {

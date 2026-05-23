@@ -28,6 +28,7 @@ import DoctorManagement from './pages/Admin/DoctorManagement';
 import AmbulanceManagement from './pages/Admin/AmbulanceManagement';
 import QueueManagement from './pages/Admin/QueueManagement';
 import Analytics from './pages/Admin/Analytics';
+import AnalyticsDashboard from './pages/Admin/Analytics/AnalyticsDashboard';
 import LeaveRequests from './pages/Admin/LeaveRequests';
 import QRScanner from './pages/Admin/QRScanner';
 import PrescriptionManagement from './pages/Student/PrescriptionManagement';
@@ -110,6 +111,7 @@ function App() {
                             <Route path="ambulances" element={<AmbulanceManagement />} />
                             <Route path="queue" element={<QueueManagement />} />
                             <Route path="analytics" element={<Analytics />} />
+                            <Route path="admin-analytics" element={<AnalyticsDashboard />} />
                             <Route path="admin-prescriptions" element={<AdminPrescriptionManagement />} />
                             <Route path="inventory" element={<InventoryManagement />} />
                             <Route path="ambulance-tracking" element={<AmbulanceTracking />} />
