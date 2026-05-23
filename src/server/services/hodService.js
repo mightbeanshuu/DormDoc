@@ -9,40 +9,43 @@
  * is responsible for passing only the scoped value.
  */
 
-const mongoose = require('mongoose');
-const Appointment = require('../models/Appointment');
-const User = require('../models/User');
-const Student = require('../models/Student');
-const LeaveDecision = require('../models/LeaveDecision');
-
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-/**
- * Returns all student ObjectIds that belong to `department`, querying both
- * the legacy User collection and the Clerk-based Student collection.
- * De-duplication is done by string key to avoid false duplicates from
- * ObjectId reference inequality.
- */
-async function getDeptStudentIds(department) {
-  const [userIds, studentIds] = await Promise.all([
-    User.find({ department, role: { $in: ['student', 'Student'] } }).distinct('_id'),
-    Student.find({ department }).distinct('_id'),
-  ]);
-  const seen = new Set();
-  const merged = [];
-  for (const id of [...userIds, ...studentIds]) {
-    const key = id.toString();
-    if (!seen.has(key)) {
-      seen.add(key);
-      merged.push(id);
-    }
-  }
-  return merged;
-}
+const ACTIVE_APPT_STATUSES = ['scheduled', 'confirmed', 'in_progress'];
 
 /**
- * Returns the start and end of the current calendar month as Date objects.
+ * Returns student UUIDs that belong to `department`, plus a lookup map from
+ * id → { name, student_id, year, email, phone, blood_group, emergency_contact }.
  */
+async function getDeptStudentIndex(sb, department) {
+  const { data: students, error } = await sb
+    .from('students')
+    .select('id, student_id, department, year, hostel, blood_group, chronic_conditions, is_currently_admitted, emergency_contact')
+    .eq('department', department);
+  if (error) throw error;
+  const ids = (students || []).map((s) => s.id);
+  if (!ids.length) return { ids: [], byId: {} };
+
+  const { data: profiles } = await sb
+    .from('profiles')
+    .select('id, name, email, phone, is_active')
+    .in('id', ids);
+  const profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+
+  const byId = {};
+  for (const s of students || []) {
+    const p = profileMap[s.id] || {};
+    byId[s.id] = {
+      ...s,
+      name: p.name || null,
+      email: p.email || null,
+      phone: p.phone || null,
+      isActive: p.is_active,
+    };
+  }
+  return { ids, byId };
+}
+
 function currentMonthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -50,177 +53,275 @@ function currentMonthRange() {
   return { start, end };
 }
 
-/**
- * Escapes a string for safe use inside a RegExp literal.
- * Prevents ReDoS when user-supplied search terms contain regex special characters.
- */
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Escapes a single value for RFC-4180 CSV output.
- */
 function csvCell(value) {
   const s = value == null ? '' : String(value);
-  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
-
 function csvRow(fields) {
   return fields.map(csvCell).join(',');
 }
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const isUuid = (id) => typeof id === 'string' && UUID_RE.test(id);
+
+async function hydrateDoctorNames(sb, doctorIds) {
+  const unique = [...new Set((doctorIds || []).filter(Boolean))];
+  if (!unique.length) return {};
+  const [{ data: profiles }, { data: staff }] = await Promise.all([
+    sb.from('profiles').select('id, name').in('id', unique),
+    sb.from('dispensary_staff').select('id, specialization').in('id', unique),
+  ]);
+  const profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p.name]));
+  const staffMap = Object.fromEntries((staff || []).map((s) => [s.id, s.specialization]));
+  return Object.fromEntries(
+    unique.map((id) => [id, { name: profileMap[id] || null, specialization: staffMap[id] || null }])
+  );
+}
+
 // ─── 1. Dashboard stats ───────────────────────────────────────────────────────
 
-async function getDashboardStats(department) {
-  const studentIds = await getDeptStudentIds(department);
-  const { start, end } = currentMonthRange();
+async function getDashboardStats(sb, department) {
+  const { ids, byId } = await getDeptStudentIndex(sb, department);
+  if (!ids.length) {
+    return {
+      pendingLeaves: 0,
+      approvedThisMonth: 0,
+      activeCases: 0,
+      emergencyCases: 0,
+      topSymptoms: [],
+      recentLeaveActivity: [],
+    };
+  }
 
-  const baseMatch = { student: { $in: studentIds } };
-  const leaveBase = { ...baseMatch, 'leaveRequest.requested': true };
+  const { start, end } = currentMonthRange();
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
   const [
-    pendingLeaves,
-    approvedThisMonth,
-    activeCases,
-    emergencyCases,
-    recentLeaves,
-    topSymptomsRaw,
+    pendingRes,
+    approvedRes,
+    activeRes,
+    emergencyRes,
+    recentLeavesRes,
+    recentSymptomsRes,
   ] = await Promise.all([
-    // Pending leave count
-    Appointment.countDocuments({
-      ...leaveBase,
-      'leaveRequest.status': 'pending',
-    }),
-
-    // Approved this month
-    Appointment.countDocuments({
-      ...leaveBase,
-      'leaveRequest.status': 'approved',
-      'leaveRequest.decidedAt': { $gte: start, $lte: end },
-    }),
-
-    // Active medical cases (non-terminal appointment statuses)
-    Appointment.countDocuments({
-      ...baseMatch,
-      status: { $in: ['scheduled', 'confirmed', 'in-progress'] },
-    }),
-
-    // Emergency / SOS cases (unresolved)
-    Appointment.countDocuments({
-      ...baseMatch,
-      isEmergency: true,
-      status: { $nin: ['completed', 'cancelled'] },
-    }),
-
-    // Recent leave activity (last 10)
-    Appointment.find({ ...leaveBase })
-      .populate('student', 'name studentId department year')
-      .select('leaveRequest createdAt student symptoms')
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean(),
-
-    // Top symptoms aggregation (last 90 days)
-    Appointment.aggregate([
-      {
-        $match: {
-          student: { $in: studentIds },
-          createdAt: { $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
-          symptoms: { $ne: '' },
-        },
-      },
-      { $group: { _id: '$symptoms', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 8 },
-    ]),
+    sb.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending').in('student_id', ids),
+    sb
+      .from('leave_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'approved')
+      .gte('decided_at', start.toISOString())
+      .lte('decided_at', end.toISOString())
+      .in('student_id', ids),
+    sb
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ACTIVE_APPT_STATUSES)
+      .in('student_id', ids),
+    sb
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_emergency', true)
+      .not('status', 'in', '("completed","cancelled")')
+      .in('student_id', ids),
+    sb
+      .from('leave_requests')
+      .select('*')
+      .in('student_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(10),
+    sb
+      .from('appointments')
+      .select('symptoms')
+      .gte('created_at', ninetyDaysAgo)
+      .neq('symptoms', '')
+      .in('student_id', ids),
   ]);
 
+  // Top symptoms — node-side group_by (PostgREST has no group_by)
+  const symptomCounts = new Map();
+  for (const row of recentSymptomsRes.data || []) {
+    const s = (row.symptoms || '').trim();
+    if (!s) continue;
+    symptomCounts.set(s, (symptomCounts.get(s) || 0) + 1);
+  }
+  const topSymptoms = [...symptomCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([symptom, count]) => ({ symptom, count }));
+
+  const recentLeaveActivity = (recentLeavesRes.data || []).map((lr) => {
+    const s = byId[lr.student_id] || {};
+    return {
+      _id: lr.id,
+      studentName: s.name || 'Unknown',
+      studentId: s.student_id || '',
+      year: s.year || '',
+      reason: lr.reason || '',
+      duration: lr.duration_days,
+      status: lr.status,
+      requestedAt: lr.created_at,
+    };
+  });
+
   return {
-    pendingLeaves,
-    approvedThisMonth,
-    activeCases,
-    emergencyCases,
-    topSymptoms: topSymptomsRaw.map(s => ({ symptom: s._id, count: s.count })),
-    recentLeaveActivity: recentLeaves.map(appt => ({
-      _id: appt._id,
-      studentName: appt.student?.name || 'Unknown',
-      studentId: appt.student?.studentId || '',
-      year: appt.student?.year || '',
-      reason: appt.leaveRequest?.reason || '',
-      duration: appt.leaveRequest?.duration,
-      status: appt.leaveRequest?.status,
-      requestedAt: appt.createdAt,
-    })),
+    pendingLeaves: pendingRes.count || 0,
+    approvedThisMonth: approvedRes.count || 0,
+    activeCases: activeRes.count || 0,
+    emergencyCases: emergencyRes.count || 0,
+    topSymptoms,
+    recentLeaveActivity,
   };
 }
 
 // ─── 2. Leave request list ────────────────────────────────────────────────────
 
-async function getLeaveRequests(department, { page = 1, limit = 15, status } = {}) {
-  const studentIds = await getDeptStudentIds(department);
+async function getLeaveRequests(sb, department, { page = 1, limit = 15, status } = {}) {
+  const { ids, byId } = await getDeptStudentIndex(sb, department);
+  if (!ids.length) return { items: [], total: 0, page: Number(page), totalPages: 0 };
 
-  const filter = {
-    student: { $in: studentIds },
-    'leaveRequest.requested': true,
-  };
+  const pageNum = Math.max(Number(page) || 1, 1);
+  const limitNum = Math.min(Math.max(Number(limit) || 15, 1), 200);
+  const offset = (pageNum - 1) * limitNum;
+
+  let query = sb.from('leave_requests').select('*', { count: 'exact' }).in('student_id', ids);
   if (status && ['pending', 'approved', 'rejected'].includes(status)) {
-    filter['leaveRequest.status'] = status;
+    query = query.eq('status', status);
   }
 
-  const skip = (Number(page) - 1) * Number(limit);
+  const { data: rows, count, error } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limitNum - 1);
+  if (error) throw error;
 
-  const [items, total] = await Promise.all([
-    Appointment.find(filter)
-      .populate('student', 'name studentId department year email phone')
-      .populate('doctor', 'name specialization')
-      .select('leaveRequest symptoms diagnosis createdAt student doctor')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean(),
-    Appointment.countDocuments(filter),
-  ]);
+  const appointmentIds = (rows || []).map((r) => r.appointment_id);
+  const { data: appointments } =
+    appointmentIds.length
+      ? await sb
+          .from('appointments')
+          .select('id, doctor_id, appointment_date, symptoms, diagnosis')
+          .in('id', appointmentIds)
+      : { data: [] };
+  const apptMap = Object.fromEntries((appointments || []).map((a) => [a.id, a]));
+  const doctorMap = await hydrateDoctorNames(sb, (appointments || []).map((a) => a.doctor_id));
+
+  const items = (rows || []).map((lr) => {
+    const appt = apptMap[lr.appointment_id];
+    const s = byId[lr.student_id] || {};
+    return {
+      _id: lr.id,
+      leaveRequest: {
+        requested: true,
+        status: lr.status,
+        reason: lr.reason,
+        duration: lr.duration_days,
+        decidedAt: lr.decided_at,
+        decidedBy: lr.decided_by,
+        decidedByName: lr.decided_by_name,
+        decisionRole: lr.decision_role,
+        decisionComments: lr.decision_comments,
+      },
+      symptoms: appt?.symptoms || '',
+      diagnosis: appt?.diagnosis || '',
+      createdAt: lr.created_at,
+      student: {
+        _id: lr.student_id,
+        name: s.name,
+        studentId: s.student_id,
+        department: s.department,
+        year: s.year,
+        email: s.email,
+        phone: s.phone,
+      },
+      doctor: appt?.doctor_id
+        ? { _id: appt.doctor_id, ...(doctorMap[appt.doctor_id] || {}) }
+        : null,
+      appointmentId: lr.appointment_id,
+    };
+  });
 
   return {
     items,
-    total,
-    page: Number(page),
-    totalPages: Math.ceil(total / Number(limit)),
+    total: count || 0,
+    page: pageNum,
+    totalPages: Math.ceil((count || 0) / limitNum),
   };
 }
 
 // ─── 3. Leave request detail ──────────────────────────────────────────────────
 
-async function getLeaveRequestDetail(appointmentId, department) {
-  const studentIds = await getDeptStudentIds(department);
+async function getLeaveRequestDetail(sb, leaveRequestId, department) {
+  const { data: lr } = await sb.from('leave_requests').select('*').eq('id', leaveRequestId).maybeSingle();
+  if (!lr) return null;
 
-  const appt = await Appointment.findOne({
-    _id: appointmentId,
-    student: { $in: studentIds },
-    'leaveRequest.requested': true,
-  })
-    .populate('student', 'name studentId department year email phone bloodGroup emergencyContact')
-    .populate('doctor', 'name specialization')
-    .lean();
+  // Department scope guard
+  const { data: studentRow } = await sb
+    .from('students')
+    .select('id, student_id, department, year, blood_group, chronic_conditions, emergency_contact, is_currently_admitted')
+    .eq('id', lr.student_id)
+    .maybeSingle();
+  if (!studentRow || studentRow.department !== department) return null;
 
-  if (!appt) return null;
+  const { data: profile } = await sb
+    .from('profiles')
+    .select('name, email, phone')
+    .eq('id', lr.student_id)
+    .maybeSingle();
 
-  // Approval history from the audit collection
-  const history = await LeaveDecision.find({ leaveRequestId: appointmentId })
-    .sort({ decidedAt: -1 })
-    .lean();
+  const { data: appointment } =
+    lr.appointment_id
+      ? await sb.from('appointments').select('*').eq('id', lr.appointment_id).maybeSingle()
+      : { data: null };
 
-  return { appointment: appt, approvalHistory: history };
+  let doctorMap = {};
+  if (appointment?.doctor_id) doctorMap = await hydrateDoctorNames(sb, [appointment.doctor_id]);
+
+  const { data: history } = await sb
+    .from('leave_decisions')
+    .select('*')
+    .eq('leave_request_id', leaveRequestId)
+    .order('decided_at', { ascending: false });
+
+  return {
+    appointment: {
+      _id: appointment?.id,
+      ...appointment,
+      student: {
+        _id: lr.student_id,
+        name: profile?.name,
+        studentId: studentRow.student_id,
+        department: studentRow.department,
+        year: studentRow.year,
+        email: profile?.email,
+        phone: profile?.phone,
+        bloodGroup: studentRow.blood_group,
+        emergencyContact: studentRow.emergency_contact,
+      },
+      doctor: appointment?.doctor_id
+        ? { _id: appointment.doctor_id, ...(doctorMap[appointment.doctor_id] || {}) }
+        : null,
+      leaveRequest: {
+        requested: true,
+        _id: lr.id,
+        status: lr.status,
+        reason: lr.reason,
+        duration: lr.duration_days,
+        decidedAt: lr.decided_at,
+        decidedBy: lr.decided_by,
+        decidedByName: lr.decided_by_name,
+        decisionRole: lr.decision_role,
+        decisionComments: lr.decision_comments,
+      },
+    },
+    approvalHistory: history || [],
+  };
 }
 
 // ─── 4. Process leave decision (approve / reject) ─────────────────────────────
 
 async function processLeaveDecision(
-  appointmentId,
+  sb,
+  leaveRequestId,
   department,
   { deciderId, deciderName, action, comments, ipAddress, userAgent }
 ) {
@@ -231,327 +332,388 @@ async function processLeaveDecision(
     throw Object.assign(new Error('Comments are required when rejecting a leave request'), { status: 400 });
   }
 
-  const studentIds = await getDeptStudentIds(department);
-
-  const appt = await Appointment.findOne({
-    _id: appointmentId,
-    student: { $in: studentIds },
-    'leaveRequest.requested': true,
-  }).populate('student', 'name studentId department');
-
-  if (!appt) {
+  const { data: lr } = await sb.from('leave_requests').select('*').eq('id', leaveRequestId).maybeSingle();
+  if (!lr) {
     throw Object.assign(new Error('Leave request not found or not in your department'), { status: 404 });
   }
 
-  // Block re-decisions: once a leave is approved or rejected it is final.
-  // The frontend hides the form for already-decided leaves, but the API
-  // must enforce this independently.
-  if (appt.leaveRequest.status !== 'pending') {
+  // Department scope guard
+  const { data: studentRow } = await sb
+    .from('students')
+    .select('department')
+    .eq('id', lr.student_id)
+    .maybeSingle();
+  if (!studentRow || studentRow.department !== department) {
+    throw Object.assign(new Error('Leave request not found or not in your department'), { status: 404 });
+  }
+  const { data: profile } = await sb
+    .from('profiles')
+    .select('name')
+    .eq('id', lr.student_id)
+    .maybeSingle();
+
+  if (lr.status !== 'pending') {
     throw Object.assign(
-      new Error(
-        `This leave request has already been ${appt.leaveRequest.status}. Re-decisions are not permitted.`
-      ),
+      new Error(`This leave request has already been ${lr.status}. Re-decisions are not permitted.`),
       { status: 409 }
     );
   }
 
-  const now = new Date();
+  const now = new Date().toISOString();
 
-  // Update appointment atomically
-  appt.leaveRequest.status = action;
-  appt.leaveRequest.approvedBy = deciderName;
-  appt.leaveRequest.approvedAt = now;
-  appt.leaveRequest.decidedBy = deciderId;
-  appt.leaveRequest.decidedByName = deciderName;
-  appt.leaveRequest.decidedAt = now;
-  appt.leaveRequest.decisionRole = 'hod';
-  appt.leaveRequest.decisionComments = comments || '';
-  appt.leaveRequest.hodReviewedAt = now;
-
-  // Create immutable audit record and save appointment in parallel
-  const auditDoc = new LeaveDecision({
-    leaveRequestId: appt._id,
-    studentId: appt.student._id,
-    studentName: appt.student.name,
-    studentDepartment: appt.student.department,
-    deciderId,
-    deciderName,
-    deciderRole: 'hod',
-    action,
-    comments: comments || '',
-    decidedAt: now,
-    leaveSnapshot: {
-      duration: appt.leaveRequest.duration,
-      reason: appt.leaveRequest.reason,
+  const { data: updated, error: updErr } = await sb
+    .from('leave_requests')
+    .update({
       status: action,
-    },
-    ipAddress: ipAddress || '',
-    userAgent: userAgent || '',
-  });
+      decided_by: deciderId,
+      decided_by_name: deciderName,
+      decided_at: now,
+      decision_role: 'hod',
+      decision_comments: comments || '',
+      hod_reviewed_at: now,
+    })
+    .eq('id', leaveRequestId)
+    .select()
+    .single();
+  if (updErr) throw updErr;
 
-  await Promise.all([appt.save(), auditDoc.save()]);
+  const { data: auditRow, error: auditErr } = await sb
+    .from('leave_decisions')
+    .insert({
+      leave_request_id: leaveRequestId,
+      student_id: lr.student_id,
+      student_name: profile?.name || '',
+      student_department: studentRow.department,
+      decider_id: deciderId,
+      decider_name: deciderName,
+      decider_role: 'hod',
+      action,
+      comments: comments || '',
+      leave_snapshot: { duration: updated.duration_days, reason: updated.reason, status: action },
+      ip_address: ipAddress || '',
+      user_agent: userAgent || '',
+    })
+    .select()
+    .single();
+  if (auditErr) throw auditErr;
 
-  return { appointment: appt, auditRecord: auditDoc };
+  return { appointment: updated, auditRecord: { _id: auditRow.id, ...auditRow } };
 }
 
 // ─── 5. Department student roster ─────────────────────────────────────────────
 
-async function getDepartmentStudents(department, { page = 1, limit = 20, search = '' } = {}) {
-  const filter = { department };
+async function getDepartmentStudents(sb, department, { page = 1, limit = 20, search = '' } = {}) {
+  const pageNum = Math.max(Number(page) || 1, 1);
+  const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 200);
+  const offset = (pageNum - 1) * limitNum;
+
+  let restrictIds = null;
   if (search.trim()) {
-    const re = new RegExp(escapeRegex(search.trim()), 'i');
-    filter.$or = [{ name: re }, { studentId: re }, { email: re }];
+    const term = `%${search.trim().replace(/[%_,()]/g, '\\$&')}%`;
+    const [{ data: matchedProfiles }, { data: matchedStudents }] = await Promise.all([
+      sb.from('profiles').select('id').or(`name.ilike.${term},email.ilike.${term}`),
+      sb.from('students').select('id').ilike('student_id', term),
+    ]);
+    restrictIds = new Set([
+      ...(matchedProfiles || []).map((r) => r.id),
+      ...(matchedStudents || []).map((r) => r.id),
+    ]);
   }
 
-  const skip = (Number(page) - 1) * Number(limit);
+  let query = sb
+    .from('students')
+    .select('id, student_id, department, year, programme, hostel, blood_group, chronic_conditions, is_currently_admitted', {
+      count: 'exact',
+    })
+    .eq('department', department);
+  if (restrictIds) {
+    const list = [...restrictIds];
+    if (!list.length) return { students: [], total: 0, page: pageNum, totalPages: 0 };
+    query = query.in('id', list);
+  }
 
-  const [students, total] = await Promise.all([
-    Student.find(filter)
-      .select('name studentId email phone department year programme hostel bloodGroup chronicConditions isActive isCurrentlyAdmitted')
-      .sort({ name: 1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean(),
-    Student.countDocuments(filter),
-  ]);
+  const { data: studentRows, count, error } = await query
+    .order('student_id', { ascending: true })
+    .range(offset, offset + limitNum - 1);
+  if (error) throw error;
 
-  return {
-    students,
-    total,
-    page: Number(page),
-    totalPages: Math.ceil(total / Number(limit)),
-  };
+  const ids = (studentRows || []).map((r) => r.id);
+  let profileMap = {};
+  if (ids.length) {
+    const { data: profiles } = await sb
+      .from('profiles')
+      .select('id, name, email, phone, is_active')
+      .in('id', ids);
+    profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+  }
+
+  const students = (studentRows || []).map((s) => {
+    const p = profileMap[s.id] || {};
+    return {
+      _id: s.id,
+      name: p.name || null,
+      studentId: s.student_id,
+      email: p.email || null,
+      phone: p.phone || null,
+      department: s.department,
+      year: s.year,
+      programme: s.programme,
+      hostel: s.hostel,
+      bloodGroup: s.blood_group,
+      chronicConditions: s.chronic_conditions || [],
+      isActive: p.is_active ?? true,
+      isCurrentlyAdmitted: s.is_currently_admitted,
+    };
+  });
+
+  return { students, total: count || 0, page: pageNum, totalPages: Math.ceil((count || 0) / limitNum) };
 }
 
 // ─── 6. Individual student medical summary ────────────────────────────────────
 
-async function getStudentMedicalSummary(studentId, department) {
-  // Verify the student belongs to the HOD's department before exposing data
-  const student = await Student.findOne({
-    _id: studentId,
-    department,
-  })
-    .select('-__v')
-    .lean();
+async function getStudentMedicalSummary(sb, studentId, department) {
+  const { data: studentRow } = await sb
+    .from('students')
+    .select('*')
+    .eq('id', studentId)
+    .maybeSingle();
+  if (!studentRow || studentRow.department !== department) return null;
 
-  if (!student) {
-    // Also check legacy User collection
-    const legacyUser = await User.findOne({
-      _id: studentId,
-      department,
-      role: { $in: ['student', 'Student'] },
-    })
-      .select('-password -__v')
-      .lean();
+  const { data: profile } = await sb
+    .from('profiles')
+    .select('id, name, email, phone, is_active, last_login_at')
+    .eq('id', studentId)
+    .maybeSingle();
 
-    if (!legacyUser) return null;
-
-    // Fall through with legacy user as the profile
-    return buildMedicalSummary(legacyUser, studentId);
-  }
-
-  return buildMedicalSummary(student, student._id);
-}
-
-async function buildMedicalSummary(profile, queryId) {
-  const [appointments, leaveHistory] = await Promise.all([
-    Appointment.find({ student: queryId })
-      .populate('doctor', 'name specialization')
-      .select('appointmentDate status symptoms diagnosis treatment prescription leaveRequest createdAt')
-      .sort({ appointmentDate: -1 })
-      .limit(20)
-      .lean(),
-
-    LeaveDecision.find({ studentId: queryId })
-      .sort({ decidedAt: -1 })
-      .limit(10)
-      .lean(),
+  const [{ data: appointments }, { data: leaveHistory }, { data: leaveRequests }] = await Promise.all([
+    sb
+      .from('appointments')
+      .select('id, doctor_id, appointment_date, status, symptoms, diagnosis, treatment, created_at')
+      .eq('student_id', studentId)
+      .order('appointment_date', { ascending: false })
+      .limit(20),
+    sb
+      .from('leave_decisions')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('decided_at', { ascending: false })
+      .limit(10),
+    sb.from('leave_requests').select('id, status').eq('student_id', studentId),
   ]);
 
-  const chronicConditions = profile.chronicConditions || profile.medicalHistory?.map(h => h.condition) || [];
+  const doctorMap = await hydrateDoctorNames(sb, (appointments || []).map((a) => a.doctor_id));
+
+  const totalLeaveRequests = (leaveRequests || []).length;
+  const approvedLeaves = (leaveRequests || []).filter((l) => l.status === 'approved').length;
+
+  const profileBlock = {
+    ...studentRow,
+    _id: studentRow.id,
+    name: profile?.name,
+    email: profile?.email,
+    phone: profile?.phone,
+    isActive: profile?.is_active ?? true,
+    studentId: studentRow.student_id,
+    bloodGroup: studentRow.blood_group,
+    chronicConditions: studentRow.chronic_conditions || [],
+    emergencyContact: studentRow.emergency_contact || {},
+  };
 
   return {
-    profile,
-    appointments,
-    leaveHistory,
+    profile: profileBlock,
+    appointments: (appointments || []).map((a) => ({
+      _id: a.id,
+      appointmentDate: a.appointment_date,
+      status: a.status,
+      symptoms: a.symptoms,
+      diagnosis: a.diagnosis,
+      treatment: a.treatment,
+      createdAt: a.created_at,
+      doctor: a.doctor_id ? { _id: a.doctor_id, ...(doctorMap[a.doctor_id] || {}) } : null,
+    })),
+    leaveHistory: leaveHistory || [],
     summary: {
-      totalAppointments: appointments.length,
-      totalLeaveRequests: appointments.filter(a => a.leaveRequest?.requested).length,
-      approvedLeaves: appointments.filter(a => a.leaveRequest?.status === 'approved').length,
-      chronicConditions,
+      totalAppointments: (appointments || []).length,
+      totalLeaveRequests,
+      approvedLeaves,
+      chronicConditions: studentRow.chronic_conditions || [],
     },
   };
 }
 
 // ─── 7. Active medical cases ──────────────────────────────────────────────────
 
-async function getActiveCases(department) {
-  const studentIds = await getDeptStudentIds(department);
+async function getActiveCases(sb, department) {
+  const { ids, byId } = await getDeptStudentIndex(sb, department);
+  if (!ids.length) return [];
 
-  const cases = await Appointment.find({
-    student: { $in: studentIds },
-    status: { $in: ['scheduled', 'confirmed', 'in-progress'] },
-  })
-    .populate('student', 'name studentId department year hostel')
-    .populate('doctor', 'name specialization')
-    .select('appointmentDate appointmentTime status symptoms diagnosis treatment isEmergency priority student doctor')
-    .sort({ priority: -1, appointmentDate: 1 })
-    .lean();
+  const { data: cases, error } = await sb
+    .from('appointments')
+    .select(
+      'id, appointment_date, appointment_time, status, symptoms, diagnosis, treatment, is_emergency, priority, doctor_id, student_id'
+    )
+    .in('student_id', ids)
+    .in('status', ACTIVE_APPT_STATUSES)
+    .order('priority', { ascending: false })
+    .order('appointment_date', { ascending: true });
+  if (error) throw error;
 
-  return cases;
+  const doctorMap = await hydrateDoctorNames(sb, (cases || []).map((c) => c.doctor_id));
+
+  return (cases || []).map((c) => {
+    const s = byId[c.student_id] || {};
+    return {
+      _id: c.id,
+      appointmentDate: c.appointment_date,
+      appointmentTime: c.appointment_time,
+      status: c.status,
+      symptoms: c.symptoms,
+      diagnosis: c.diagnosis,
+      treatment: c.treatment,
+      isEmergency: c.is_emergency,
+      priority: c.priority,
+      student: {
+        _id: c.student_id,
+        name: s.name,
+        studentId: s.student_id,
+        department: s.department,
+        year: s.year,
+        hostel: s.hostel,
+      },
+      doctor: c.doctor_id ? { _id: c.doctor_id, ...(doctorMap[c.doctor_id] || {}) } : null,
+    };
+  });
 }
 
 // ─── 8. Department analytics ──────────────────────────────────────────────────
 
-async function getDepartmentAnalytics(department) {
-  const studentIds = await getDeptStudentIds(department);
+async function getDepartmentAnalytics(sb, department) {
+  const { ids, byId } = await getDeptStudentIndex(sb, department);
+  if (!ids.length) {
+    return {
+      monthlyLeaves: [],
+      topSymptoms: [],
+      demographics: [],
+      recoveryRate: 0,
+      totalAppointments: 0,
+      completedAppointments: 0,
+      emergencyCount: 0,
+      yearWiseLeaves: [],
+    };
+  }
 
-  const baseMatch = { student: { $in: studentIds } };
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [monthlyLeaves, topSymptoms, demographics, recoveryStats, yearWiseLeaves] =
-    await Promise.all([
-      // Monthly leave request trends (last 12 months)
-      Appointment.aggregate([
-        {
-          $match: {
-            ...baseMatch,
-            'leaveRequest.requested': true,
-            createdAt: { $gte: twelveMonthsAgo },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              year: { $year: '$createdAt' },
-              month: { $month: '$createdAt' },
-            },
-            total: { $sum: 1 },
-            approved: {
-              $sum: { $cond: [{ $eq: ['$leaveRequest.status', 'approved'] }, 1, 0] },
-            },
-            rejected: {
-              $sum: { $cond: [{ $eq: ['$leaveRequest.status', 'rejected'] }, 1, 0] },
-            },
-            pending: {
-              $sum: { $cond: [{ $eq: ['$leaveRequest.status', 'pending'] }, 1, 0] },
-            },
-          },
-        },
-        { $sort: { '_id.year': 1, '_id.month': 1 } },
-      ]),
+  const [
+    { data: leaves12mo },
+    { data: symptoms90 },
+    { data: appointmentSummary },
+    { data: yearLeaves },
+  ] = await Promise.all([
+    sb
+      .from('leave_requests')
+      .select('created_at, status')
+      .in('student_id', ids)
+      .gte('created_at', twelveMonthsAgo.toISOString()),
+    sb
+      .from('appointments')
+      .select('symptoms')
+      .in('student_id', ids)
+      .gte('created_at', ninetyDaysAgo)
+      .neq('symptoms', ''),
+    sb.from('appointments').select('status, is_emergency').in('student_id', ids),
+    sb.from('leave_requests').select('student_id').in('student_id', ids),
+  ]);
 
-      // Top symptoms (last 90 days)
-      Appointment.aggregate([
-        {
-          $match: {
-            ...baseMatch,
-            createdAt: { $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
-            symptoms: { $nin: ['', null] },
-          },
-        },
-        { $group: { _id: '$symptoms', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 10 },
-      ]),
+  // Monthly leaves bucket
+  const monthBuckets = new Map();
+  for (const lr of leaves12mo || []) {
+    const d = new Date(lr.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthBuckets.has(key)) {
+      monthBuckets.set(key, {
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        label: key,
+        total: 0,
+        approved: 0,
+        rejected: 0,
+        pending: 0,
+      });
+    }
+    const b = monthBuckets.get(key);
+    b.total += 1;
+    if (b[lr.status] != null) b[lr.status] += 1;
+  }
+  const monthlyLeaves = [...monthBuckets.values()].sort((a, b) =>
+    a.year !== b.year ? a.year - b.year : a.month - b.month
+  );
 
-      // Year-wise student demographics (from Student collection)
-      Student.aggregate([
-        { $match: { department } },
-        {
-          $group: {
-            _id: '$year',
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ]),
+  // Top symptoms
+  const symptomCounts = new Map();
+  for (const row of symptoms90 || []) {
+    const s = (row.symptoms || '').trim();
+    if (!s) continue;
+    symptomCounts.set(s, (symptomCounts.get(s) || 0) + 1);
+  }
+  const topSymptoms = [...symptomCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([symptom, count]) => ({ symptom, count }));
 
-      // Recovery stats: completed vs total appointments
-      Appointment.aggregate([
-        { $match: baseMatch },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            completed: {
-              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
-            },
-            cancelled: {
-              $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] },
-            },
-            emergency: {
-              $sum: { $cond: ['$isEmergency', 1, 0] },
-            },
-          },
-        },
-      ]),
+  // Recovery stats
+  let total = 0, completed = 0, cancelled = 0, emergency = 0;
+  for (const row of appointmentSummary || []) {
+    total += 1;
+    if (row.status === 'completed') completed += 1;
+    if (row.status === 'cancelled') cancelled += 1;
+    if (row.is_emergency) emergency += 1;
+  }
+  const recoveryRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-      // Leave rate by academic year
-      Appointment.aggregate([
-        {
-          $match: {
-            ...baseMatch,
-            'leaveRequest.requested': true,
-          },
-        },
-        {
-          $lookup: {
-            from: 'students',
-            localField: 'student',
-            foreignField: '_id',
-            as: 'studentDoc',
-          },
-        },
-        { $unwind: { path: '$studentDoc', preserveNullAndEmptyArrays: true } },
-        {
-          $group: {
-            _id: '$studentDoc.year',
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ]),
-    ]);
+  // Demographics by year (from byId map)
+  const yearDemoBuckets = new Map();
+  for (const s of Object.values(byId)) {
+    const y = s.year || 'Unknown';
+    yearDemoBuckets.set(y, (yearDemoBuckets.get(y) || 0) + 1);
+  }
+  const demographics = [...yearDemoBuckets.entries()]
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+    .map(([year, count]) => ({ year, count }));
 
-  const recovery = recoveryStats[0] || { total: 0, completed: 0, cancelled: 0, emergency: 0 };
-  const recoveryRate = recovery.total > 0
-    ? Math.round((recovery.completed / recovery.total) * 100)
-    : 0;
+  // Year-wise leaves
+  const yearLeaveBuckets = new Map();
+  for (const row of yearLeaves || []) {
+    const y = byId[row.student_id]?.year || 'Unknown';
+    yearLeaveBuckets.set(y, (yearLeaveBuckets.get(y) || 0) + 1);
+  }
+  const yearWiseLeaves = [...yearLeaveBuckets.entries()]
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+    .map(([year, count]) => ({ year, count }));
 
   return {
-    monthlyLeaves: monthlyLeaves.map(m => ({
-      year: m._id.year,
-      month: m._id.month,
-      label: `${m._id.year}-${String(m._id.month).padStart(2, '0')}`,
-      total: m.total,
-      approved: m.approved,
-      rejected: m.rejected,
-      pending: m.pending,
-    })),
-    topSymptoms: topSymptoms.map(s => ({ symptom: s._id, count: s.count })),
-    demographics: demographics.map(d => ({ year: d._id || 'Unknown', count: d.count })),
+    monthlyLeaves,
+    topSymptoms,
+    demographics,
     recoveryRate,
-    totalAppointments: recovery.total,
-    completedAppointments: recovery.completed,
-    emergencyCount: recovery.emergency,
-    yearWiseLeaves: yearWiseLeaves.map(y => ({
-      year: y._id || 'Unknown',
-      count: y.count,
-    })),
+    totalAppointments: total,
+    completedAppointments: completed,
+    emergencyCount: emergency,
+    yearWiseLeaves,
   };
 }
 
 // ─── 9. Monthly CSV report ────────────────────────────────────────────────────
 
-async function getMonthlyReportCsv(department, year, month) {
+async function getMonthlyReportCsv(sb, department, year, month) {
   const monthNum = Number(month);
   const yearNum = Number(year);
 
   if (
     !monthNum || monthNum < 1 || monthNum > 12 ||
-    !yearNum  || yearNum  < 2000 || yearNum > 2100
+    !yearNum || yearNum < 2000 || yearNum > 2100
   ) {
     throw Object.assign(
       new Error('Valid year (2000–2100) and month (1–12) are required'),
@@ -562,53 +724,69 @@ async function getMonthlyReportCsv(department, year, month) {
   const start = new Date(yearNum, monthNum - 1, 1);
   const end = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
 
-  const studentIds = await getDeptStudentIds(department);
+  const { ids, byId } = await getDeptStudentIndex(sb, department);
+  if (!ids.length) {
+    return {
+      csv: csvRow([
+        'Date', 'Student Name', 'Student ID', 'Year', 'Email', 'Department',
+        'Symptoms', 'Diagnosis', 'Status', 'Leave Requested', 'Leave Duration (days)',
+        'Leave Status', 'Leave Reason', 'Doctor', 'Specialization', 'Is Emergency',
+      ]),
+      filename: `hod-report-${department.replace(/\s+/g, '_')}-${yearNum}-${String(monthNum).padStart(2, '0')}.csv`,
+      recordCount: 0,
+    };
+  }
 
-  const appointments = await Appointment.find({
-    student: { $in: studentIds },
-    createdAt: { $gte: start, $lte: end },
-  })
-    .populate('student', 'name studentId year email department')
-    .populate('doctor', 'name specialization')
-    .lean();
+  const { data: appointments } = await sb
+    .from('appointments')
+    .select('id, appointment_date, doctor_id, status, symptoms, diagnosis, is_emergency, student_id, created_at')
+    .in('student_id', ids)
+    .gte('created_at', start.toISOString())
+    .lte('created_at', end.toISOString());
+
+  const appointmentIds = (appointments || []).map((a) => a.id);
+  const { data: leaveRequestsForMonth } =
+    appointmentIds.length
+      ? await sb
+          .from('leave_requests')
+          .select('appointment_id, duration_days, reason, status')
+          .in('appointment_id', appointmentIds)
+      : { data: [] };
+  const leaveMap = Object.fromEntries(
+    (leaveRequestsForMonth || []).map((lr) => [lr.appointment_id, lr])
+  );
+
+  const doctorMap = await hydrateDoctorNames(sb, (appointments || []).map((a) => a.doctor_id));
 
   const headers = [
-    'Date',
-    'Student Name',
-    'Student ID',
-    'Year',
-    'Email',
-    'Department',
-    'Symptoms',
-    'Diagnosis',
-    'Status',
-    'Leave Requested',
-    'Leave Duration (days)',
-    'Leave Status',
-    'Leave Reason',
-    'Doctor',
-    'Specialization',
-    'Is Emergency',
+    'Date', 'Student Name', 'Student ID', 'Year', 'Email', 'Department',
+    'Symptoms', 'Diagnosis', 'Status', 'Leave Requested', 'Leave Duration (days)',
+    'Leave Status', 'Leave Reason', 'Doctor', 'Specialization', 'Is Emergency',
   ];
 
-  const rows = appointments.map(a => [
-    a.appointmentDate ? new Date(a.appointmentDate).toISOString().split('T')[0] : '',
-    a.student?.name || '',
-    a.student?.studentId || '',
-    a.student?.year || '',
-    a.student?.email || '',
-    a.student?.department || department,
-    a.symptoms || '',
-    a.diagnosis || '',
-    a.status || '',
-    a.leaveRequest?.requested ? 'Yes' : 'No',
-    a.leaveRequest?.duration || '',
-    a.leaveRequest?.requested ? (a.leaveRequest.status || '') : '',
-    a.leaveRequest?.requested ? (a.leaveRequest.reason || '') : '',
-    a.doctor?.name || '',
-    a.doctor?.specialization || '',
-    a.isEmergency ? 'Yes' : 'No',
-  ]);
+  const rows = (appointments || []).map((a) => {
+    const s = byId[a.student_id] || {};
+    const lr = leaveMap[a.id];
+    const doc = a.doctor_id ? doctorMap[a.doctor_id] || {} : {};
+    return [
+      a.appointment_date || '',
+      s.name || '',
+      s.student_id || '',
+      s.year || '',
+      s.email || '',
+      s.department || department,
+      a.symptoms || '',
+      a.diagnosis || '',
+      a.status || '',
+      lr ? 'Yes' : 'No',
+      lr ? lr.duration_days : '',
+      lr ? lr.status : '',
+      lr ? lr.reason : '',
+      doc.name || '',
+      doc.specialization || '',
+      a.is_emergency ? 'Yes' : 'No',
+    ];
+  });
 
   const csvLines = [csvRow(headers), ...rows.map(csvRow)];
   return {
@@ -621,6 +799,7 @@ async function getMonthlyReportCsv(department, year, month) {
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+  isUuid,
   getDashboardStats,
   getLeaveRequests,
   getLeaveRequestDetail,
