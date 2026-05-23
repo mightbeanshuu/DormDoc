@@ -22,7 +22,7 @@
 <br />
 
 <a href="https://skillicons.dev">
-  <img src="https://skillicons.dev/icons?i=react,nodejs,express,mongodb,materialui,socketio,jwt,docker,git,github" alt="Tech Stack" />
+  <img src="https://skillicons.dev/icons?i=react,nodejs,express,supabase,postgres,materialui,git,github" alt="Tech Stack" />
 </a>
 
 <br /><br />
@@ -63,7 +63,7 @@
 
 **DormDoc** is a full-stack, production-grade web application engineered to digitise every workflow inside a campus medical centre. From the moment a student scans a QR code at the counter to the moment an administrator audits monthly inventory, the entire patient journey lives inside a single, secure, real-time platform.
 
-The system replaces fragmented paper records, manual queues, and siloed spreadsheets with a unified MERN-stack solution — purpose-built for the scale, reliability, and access-control requirements of an institutional healthcare environment.
+The system replaces fragmented paper records, manual queues, and siloed spreadsheets with a unified React + Express + Supabase platform — purpose-built for the scale, reliability, and access-control requirements of an institutional healthcare environment.
 
 > *"A campus clinic should run with the same precision as the hospitals its students may one day work in."*
 
@@ -104,7 +104,7 @@ The system replaces fragmented paper records, manual queues, and siloed spreadsh
 ### 🩺 For Doctors
 - 🗂️ **Patient queue management** with priority flags
 - ✍️ **E-prescription writer** with drug-interaction hints
-- 💬 **Real-time chat** with patients via Socket.io
+- 💬 **Real-time updates** via Supabase Realtime postgres_changes
 - 📊 **Appointment dashboard** with daily/weekly views
 - 📁 **Patient history lookup** across visits
 - 🔔 **Live notifications** for new bookings & SOS
@@ -126,9 +126,9 @@ The system replaces fragmented paper records, manual queues, and siloed spreadsh
 <td width="50%" valign="top">
 
 ### 🔒 Platform-Wide
-- 🔐 **JWT-based RBAC** — three distinct role spaces
+- 🔐 **Postgres RLS** — 7 roles × 20 tables, all default-deny
 - 🛡️ **Helmet, CORS, rate-limiting** baked in
-- ⚡ **Socket.io real-time** layer for live UX
+- ⚡ **Supabase Realtime** for live UX (no custom socket server)
 - 📱 **Fully responsive** — mobile-first design
 - 🌐 **REST API** with input validation
 - 🧪 **Health-check endpoints** for monitoring
@@ -145,15 +145,20 @@ The system replaces fragmented paper records, manual queues, and siloed spreadsh
 
 | Layer | Technologies |
 | :--- | :--- |
-| **Frontend** | React 18 · Material-UI · React Query · React Router · Recharts · Socket.io-client |
-| **Backend** | Node.js (≥18) · Express · Mongoose · Socket.io · JWT |
-| **Database** | MongoDB 6.0+ |
-| **Security** | Helmet · CORS · express-rate-limit · bcryptjs · express-validator |
-| **Integrations** | Nodemailer (SMTP) · Google Gemini / OpenAI (chatbot) · QRCode |
-| **Tooling** | ESLint · Husky · lint-staged · Nodemon · Concurrently |
-| **CI / Deploy** | GitHub Actions · Netlify · Heroku-ready |
+| **Frontend** | React 18 · Material-UI · React Query · React Router · Recharts · `@supabase/supabase-js` |
+| **Backend** | Node.js (≥18) · Express · `@supabase/supabase-js` (service-role) · `jsonwebtoken` (Supabase JWT verify) |
+| **Database** | Supabase Postgres (15+) with Row-Level Security |
+| **Auth** | Supabase Auth — email OTP, JWT (HS256) |
+| **Realtime** | Supabase Realtime `postgres_changes` over Websockets |
+| **Storage** | Supabase Storage (private `prescriptions` bucket, signed URLs) |
+| **Security** | Helmet · CORS · express-rate-limit · express-validator |
+| **Integrations** | Nodemailer (SMTP) · Groq / OpenAI / Cohere (AI chat) · QRCode |
+| **Tooling** | Supabase CLI · ESLint · Husky · lint-staged · Nodemon · Concurrently |
+| **CI** | GitHub Actions |
 
 </div>
+
+> See `MIGRATION.md` for the full record of how this stack replaced the original MongoDB / Clerk / Socket.io / Multer one across PRs #12–26.
 
 ---
 
@@ -164,50 +169,60 @@ graph TD
     subgraph Client["🖥️ React Client — src/client"]
         UI[Material-UI Components]
         RQ[React Query Cache]
-        CTX[Auth & Socket Contexts]
-        WS1[Socket.io Client]
+        CTX[Auth & Realtime Contexts]
+        SBC[supabase-js client]
     end
 
     subgraph Server["⚙️ Express API — src/server"]
-        MW[Helmet · CORS · Rate-limit · JWT Auth]
-        RT[REST Routes — student / doctor / admin]
-        SOCK[Socket.io Server]
-        SVC[Service Layer — controllers, validators]
-        MD[Mongoose Models]
+        MW[Helmet · CORS · Rate-limit · Supabase JWT verify]
+        RT[REST Routes — student / doctor / admin / hod]
+        SVC[Service Layer — hodService, analytics services]
+        SBA[supabase-js service-role + per-request scoped client]
+    end
+
+    subgraph Supabase["🟢 Supabase project"]
+        DB[(Postgres + RLS)]
+        AUTH[Auth — email OTP]
+        RT2[Realtime — postgres_changes]
+        STOR[Storage — prescriptions bucket]
     end
 
     subgraph External["🌐 External Services"]
-        DB[(MongoDB Atlas)]
-        AI[AI Providers — Gemini / OpenAI]
+        AI[AI — Groq / OpenAI / Cohere]
         MAIL[SMTP — Nodemailer]
         QR[QR-Code Generator]
     end
 
     UI -->|HTTPS / Axios| MW
-    WS1 <-->|WebSocket| SOCK
+    SBC -->|Auth + Realtime + Storage| AUTH
+    SBC <-->|postgres_changes| RT2
+    SBC -->|signed URL| STOR
     CTX --> UI
     RQ --> UI
     MW --> RT
     RT --> SVC
-    SVC --> MD
-    MD --> DB
+    SVC --> SBA
+    SBA -->|PostgREST| DB
+    SBA -->|admin API| AUTH
+    SBA -->|upload / delete| STOR
     SVC --> AI
     SVC --> MAIL
     SVC --> QR
 
     style Client fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
     style Server fill:#dcfce7,stroke:#10b981,color:#064e3b
+    style Supabase fill:#d1fae5,stroke:#059669,color:#064e3b
     style External fill:#fef3c7,stroke:#f59e0b,color:#78350f
 ```
 
 ### Request Lifecycle
 
-1. **Client** issues an authenticated request bearing a JWT.
-2. **Middleware stack** applies Helmet, CORS, rate-limiting, and token verification.
-3. **Route handler** delegates to a controller, which validates inputs.
-4. **Service layer** orchestrates business logic across Mongoose models.
-5. **Database** persists the change; relevant events broadcast via Socket.io.
-6. **Client** receives the HTTP response and any live updates simultaneously.
+1. **Client** issues an authenticated request bearing a Supabase JWT.
+2. **Middleware stack** applies Helmet, CORS, rate-limiting, and HS256 JWT verification against `SUPABASE_JWT_SECRET`; loads the caller's profile + role row and attaches a `req.sb` Supabase client (user-scoped for real users, service-role for dev tokens).
+3. **Route handler** delegates to a controller / service, which validates inputs.
+4. **Service layer** issues Supabase queries against Postgres, Storage, or the Auth admin API.
+5. **RLS in Postgres** enforces row-level access on every read/write.
+6. **Live updates** reach the client directly via the Supabase Realtime channel (no server roundtrip needed); RLS scopes which clients see which events.
 
 ---
 
@@ -217,30 +232,31 @@ graph TD
 DormDoc/
 ├── assets/                 # Static assets (logo, branding)
 ├── docs/                   # Extended documentation
-├── scripts/                # Seed / migration scripts
+├── scripts/                # Utility scripts (incl. mongo-to-supabase ETL)
+├── supabase/               # Supabase project config
+│   ├── config.toml
+│   ├── migrations/         # SQL migrations (extensions, schema, RLS, storage, realtime)
+│   └── tests/              # pgTAP RLS test suite
 ├── src/
 │   ├── client/             # React frontend
-│   │   ├── public/
 │   │   └── src/
 │   │       ├── components/
-│   │       ├── contexts/
-│   │       ├── hooks/
+│   │       ├── contexts/   # AuthContext, RealtimeContext, DevBypassContext
+│   │       ├── lib/        # supabase client export
 │   │       ├── pages/
 │   │       └── services/
 │   └── server/             # Express backend
-│       ├── config/
 │       ├── controllers/
-│       ├── middleware/
-│       ├── models/
-│       ├── routes/
-│       ├── services/
-│       ├── utils/
+│       ├── db/             # supabase.js + storage.js helpers
+│       ├── middleware/     # authenticateToken, requireRole, scopeToDepartment
+│       ├── routes/         # one file per resource
+│       ├── services/       # hodService, analytics services
 │       └── server.js
-├── tests/                  # Unit & integration tests
 ├── .env.example
-├── netlify.toml
 └── package.json
 ```
+
+> No `src/server/models/` — Mongoose was removed at the end of Phase 3 (PR #23). The schema is the Postgres tables, defined in `supabase/migrations/`.
 
 ---
 
@@ -252,7 +268,7 @@ DormDoc/
 | :--- | :---: | :--- |
 | [Node.js](https://nodejs.org/) | **18.0** | LTS recommended |
 | npm | **9.0** | Bundled with Node.js |
-| [MongoDB](https://www.mongodb.com/try/download/community) | **6.0** | Local or Atlas |
+| Supabase project | — | Free tier is enough. Note the project ref, URL, anon key, service-role key, and JWT secret. |
 | Git | **2.30** | — |
 
 ### Installation
@@ -266,12 +282,20 @@ cd DormDoc
 npm install
 npm run install-client
 
-# 3. Create your environment file
+# 3. Create your environment files
 cp .env.example .env
-#    → fill in MONGODB_URI, JWT_SECRET, and any optional keys
+#    Then create .env.local (gitignored) with the secrets:
+#      SUPABASE_URL=https://<ref>.supabase.co
+#      SUPABASE_SERVICE_ROLE_KEY=...
+#      SUPABASE_JWT_SECRET=...           # from Project Settings → API → JWT
+#      SUPABASE_ACCESS_TOKEN=...         # personal access token, for supabase CLI
+#    And src/client/.env.development.local with:
+#      REACT_APP_SUPABASE_URL=https://<ref>.supabase.co
+#      REACT_APP_SUPABASE_ANON_KEY=...
 
-# 4. (Optional) Seed the database with demo data
-npm run seed
+# 4. Push the schema + RLS policies + Storage buckets + Realtime publication
+npx supabase link --project-ref <your-ref>
+npx supabase db push
 
 # 5. Launch the full stack in dev mode
 npm run dev
@@ -280,6 +304,8 @@ npm run dev
 The dev server boots:
 - ⚛️  **React client** → http://localhost:3000
 - 🔌 **Express API** → http://localhost:5000
+
+In `NODE_ENV=development` the server accepts three bypass tokens (`dev_token` for student, `hod_dev_token` for HOD, `admin_dev_token` for admin) that skip Supabase Auth. Backed by real seeded `auth.users` rows so policy-respecting queries still work — see `supabase/migrations/` and the memory notes for the seed SQL.
 
 ---
 
@@ -302,14 +328,14 @@ curl http://localhost:5000/api/health
 ### Book an appointment (student)
 
 ```bash
-curl -X POST http://localhost:5000/api/student/appointments \
-  -H "Authorization: Bearer <JWT_TOKEN>" \
+curl -X POST http://localhost:5000/api/student/book-appointment \
+  -H "Authorization: Bearer dev_token" \
   -H "Content-Type: application/json" \
   -d '{
-    "doctorId": "64f1a2b3c4d5e6f7a8b9c0d1",
-    "date": "2026-05-25",
-    "timeSlot": "10:00 AM",
-    "reason": "Routine check-up"
+    "doctorId": "00000000-0000-0000-0000-000000000003",
+    "appointmentDate": "2026-05-25",
+    "appointmentTime": "10:00",
+    "symptoms": "Routine check-up"
   }'
 ```
 
@@ -317,9 +343,9 @@ curl -X POST http://localhost:5000/api/student/appointments \
 {
   "message": "Appointment booked successfully",
   "appointment": {
-    "_id": "64f1a2b3c4d5e6f7a8b9c0d2",
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
     "status": "scheduled",
-    "date": "2026-05-25T00:00:00.000Z"
+    "appointment_date": "2026-05-25"
   }
 }
 ```
@@ -328,38 +354,41 @@ curl -X POST http://localhost:5000/api/student/appointments \
 
 ```bash
 curl -X POST http://localhost:5000/api/student/sos \
-  -H "Authorization: Bearer <JWT_TOKEN>" \
+  -H "Authorization: Bearer dev_token" \
   -H "Content-Type: application/json" \
-  -d '{ "lat": 23.4126, "lng": 85.4396, "note": "Severe chest pain" }'
+  -d '{ "symptoms": "Severe chest pain", "location": { "address": "Hostel 3" } }'
 ```
-
-A full route inventory lives in [`docs/api.md`](docs/api.md).
 
 ---
 
 ## ⚙️ Configuration
 
-All runtime configuration is driven by environment variables. Copy [`.env.example`](.env.example) to `.env` and customise.
+Runtime configuration is split across two files. `.env` holds committed defaults; `.env.local` holds secrets and overrides (gitignored).
+
+### Server (`.env` + `.env.local`)
 
 | Variable | Required | Default | Purpose |
 | :--- | :---: | :--- | :--- |
 | `NODE_ENV` |  | `development` | Runtime environment |
 | `PORT` |  | `5000` | Express server port |
-| `MONGODB_URI` | ✅ | `mongodb://localhost:27017/dormdoc` | MongoDB connection URI |
-| `JWT_SECRET` | ✅ | — | JWT signing secret |
-| `JWT_EXPIRE` |  | `7d` | Token lifetime |
-| `CLIENT_URL` |  | `http://localhost:3000` | Allowed CORS origin |
-| `GOOGLE_AI_API_KEY` |  | — | Gemini API key (chatbot) |
-| `OPENAI_API_KEY` |  | — | OpenAI API key (chatbot) |
-| `EMAIL_HOST` |  | `smtp.gmail.com` | SMTP host |
-| `EMAIL_PORT` |  | `587` | SMTP port |
-| `EMAIL_USER` |  | — | SMTP username |
-| `EMAIL_PASS` |  | — | SMTP password / app token |
-| `QR_CODE_SECRET` |  | — | QR-code signing secret |
-| `ERP_API_URL` |  | — | External ERP endpoint |
-| `ERP_API_KEY` |  | — | External ERP key |
+| `SUPABASE_URL` | ✅ | — | `https://<ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | — | Service-role key (bypasses RLS — server only) |
+| `SUPABASE_JWT_SECRET` | ✅ | — | HS256 secret used to verify incoming JWTs |
+| `SUPABASE_ACCESS_TOKEN` |  | — | Personal access token, for `supabase` CLI from non-TTY shells |
+| `CLIENT_URL` |  | `http://localhost:3000` | Comma-separated allow-list of CORS origins |
+| `GROQ_API_KEY` |  | — | Groq API key (used by `routes/chat.js`) |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` |  | — | SMTP for leave-request notifications |
+| `MONGO_URI` |  | — | Only used by `scripts/mongo-to-supabase-etl.js` during cutover |
 
-> ⚠️  **Never commit your `.env` file.** It is git-ignored by default.
+### Client (`src/client/.env.development.local`)
+
+| Variable | Required | Purpose |
+| :--- | :---: | :--- |
+| `REACT_APP_SUPABASE_URL` | ✅ | Same as server `SUPABASE_URL` |
+| `REACT_APP_SUPABASE_ANON_KEY` | ✅ | Anon key (RLS-respecting) |
+| `REACT_APP_SERVER_URL` |  | Override the API base URL (default `http://localhost:5001`) |
+
+> ⚠️  **Never commit `.env.local` or `.env.development.local`.** Both are git-ignored.
 
 ---
 
@@ -382,16 +411,13 @@ Test coverage reports are generated under `coverage/` and uploaded by CI on ever
 
 ## 📦 Deployment
 
-DormDoc ships with deployment recipes for multiple platforms:
+The Supabase migration is **code-complete** (see `MIGRATION.md`). Deployment artifacts:
 
-| Platform | Status |
-| :--- | :---: |
-| **Netlify** (client) | ✅ Configured via `netlify.toml` |
-| **Heroku** (full-stack) | ✅ `heroku-postbuild` hook |
-| **Docker** | 🚧 Coming in v1.2 |
-| **Kubernetes** | 🚧 On the roadmap |
+- **Database / Auth / Storage / Realtime:** managed Supabase project (free tier targets 5K users). Schema lives in `supabase/migrations/` — `supabase db push` is idempotent.
+- **Application:** Node Express server + CRA static bundle. Intended target is **Railway**; the deploy runbook lands in a future PR alongside the cutover.
+- **Data cutover from a previous Mongo instance (if applicable):** run `node scripts/mongo-to-supabase-etl.js --dry-run` first, populate `USER_ID_MAP` with the Mongo → Supabase auth-id mapping, then a real run during the maintenance window.
 
-For a production build:
+For a local production build:
 
 ```bash
 npm run build && npm start
@@ -401,18 +427,17 @@ npm run build && npm start
 
 ## 🗺️ Roadmap
 
-- [x] Core MERN scaffolding & role-based authentication
-- [x] Appointment booking, prescriptions, and SOS
+- [x] Core React + Express scaffolding & role-based access
+- [x] Appointment booking, prescriptions, ambulance dispatch, SOS
 - [x] Analytics dashboard & inventory module
-- [x] AI chatbot integration (Gemini / OpenAI)
-- [ ] Comprehensive unit + integration test coverage
-- [ ] End-to-end test suite with Cypress / Playwright
+- [x] AI chatbot integration (Groq tool-calling)
+- [x] **Supabase migration** — Postgres + Auth + Realtime + Storage (Phases 0–5, 8-ETL)
+- [ ] Railway deploy + cutover runbook (Phase 7 + 8.2–8.4)
+- [ ] Edge Function features: appointment reminders, MSG91 SMS, analytics aggregation (Phase 6)
+- [ ] pgTAP RLS coverage expansion + load tests (Phase 9)
+- [ ] Custom SMTP (Resend / Postmark / SES) — default Supabase only emails dashboard members
 - [ ] Telemedicine video consultations (WebRTC)
-- [ ] Wearable & IoT health-device integration
 - [ ] React Native mobile applications
-- [ ] Predictive analytics & ML-driven triage
-- [ ] Docker images + Kubernetes manifests
-- [ ] Staging & production CI/CD pipelines
 
 See the [open issues](https://github.com/mightbeanshuu/DormDoc/issues) for a live list.
 
@@ -458,7 +483,7 @@ Standing on the shoulders of giants — sincere thanks to the maintainers of:
 
 <div align="center">
 
-[React](https://react.dev/) · [Express](https://expressjs.com/) · [MongoDB](https://www.mongodb.com/) · [Material-UI](https://mui.com/) · [Socket.io](https://socket.io/) · [Recharts](https://recharts.org/) · [Mongoose](https://mongoosejs.com/) · [JWT](https://jwt.io/) · [Helmet](https://helmetjs.github.io/)
+[React](https://react.dev/) · [Express](https://expressjs.com/) · [Supabase](https://supabase.com/) · [PostgreSQL](https://www.postgresql.org/) · [Material-UI](https://mui.com/) · [Recharts](https://recharts.org/) · [Helmet](https://helmetjs.github.io/) · [Groq](https://groq.com/)
 
 And to every contributor, tester, and end-user whose feedback shaped this platform.
 
