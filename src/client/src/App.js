@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { DevBypassProvider } from './contexts/DevBypassContext';
-import { SocketProvider } from './contexts/SocketContext';
+import { RealtimeProvider } from './contexts/RealtimeContext';
 import RequireAuth from './components/Auth/RequireAuth';
 import DevBypassBanner from './components/DevBypassBanner';
 import Layout from './components/Layout/Layout';
@@ -80,7 +80,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <DevBypassProvider>
         <AuthProvider>
-          <SocketProvider>
+          <RealtimeProvider>
             <Router>
               <LocationGate>
                 <Routes>
@@ -155,7 +155,7 @@ function App() {
               <ToastContainer />
               <DevBypassBanner />
             </Router>
-          </SocketProvider>
+          </RealtimeProvider>
         </AuthProvider>
       </DevBypassProvider>
     </QueryClientProvider>
