@@ -18,26 +18,29 @@ All migration work lives on `feat/supabase-migration`. `main` stays untouched un
 
 ---
 
-## Phase 0 — Foundation *(1–2 days)*
+## Phase 0 — Foundation *(1–2 days)* — **DONE except final link**
 
 ### Block 0.1: Accounts & projects
-- [ ] Create Supabase account at supabase.com
-- [ ] Create project `dormdoc-staging` (region `ap-south-1` Mumbai)
-- [ ] Save anon key, service-role key, JWT secret in `.env.local` (NOT committed)
-- [ ] (Optional) Create `dormdoc-prod` for later cutover
+- [x] Supabase project `Dorm Doc` created (ref **wlkwirmormsspyxgkfqg**, region `ap-northeast-1` Tokyo, free tier)
+- [x] anon + service_role + JWT secret saved in `.env.local` (gitignored)
+- [ ] Rotate service_role (deferred — was pasted in chat, user accepted risk)
+- [ ] (Later) Create `dormdoc-prod` for cutover
 
 ### Block 0.2: Local dev environment
-- [ ] Install Docker Desktop for Mac
-- [ ] `npx supabase init` → scaffolds `supabase/` folder
-- [ ] `npx supabase login`
-- [ ] `npx supabase link --project-ref <ref>`
-- [ ] `npx supabase start` → verify Postgres + Auth + Storage run locally
+- [x] Install Docker engine — used **colima** (lightweight, no admin password) instead of Docker Desktop
+- [x] `npx supabase init` → `supabase/config.toml` committed
+- [x] `npx supabase login` (user ran interactively)
+- [ ] `npx supabase link --project-ref wlkwirmormsspyxgkfqg` ← **next**
+- [ ] `npx supabase start` (optional — only needed for local stack work)
 
-### Block 0.3: Branch + envs
-- [x] Create `feat/supabase-migration` branch
-- [ ] Add Supabase env vars to `.env.example`
-- [ ] Install `@supabase/supabase-js` in client + server
-- [ ] Install Supabase CLI as devDependency (done — v2.101.0)
+### Block 0.3: Branch + envs + MCP
+- [x] Branch `feat/supabase-migration` created and pushed
+- [x] Supabase env vars in `.env.example`
+- [x] `@supabase/supabase-js` installed (root + src/client)
+- [x] Supabase CLI v2.101.0 as devDependency
+- [x] Supabase MCP server registered (`.mcp.json` committed, activates on Claude Code restart)
+
+**PR open:** [#12 — Phase 0: Supabase migration plan + scaffolding](https://github.com/mightbeanshuu/DormDoc/pull/12)
 
 **Deliverable:** local Supabase running, repo wired, branch ready. No functional change yet.
 
@@ -45,41 +48,60 @@ All migration work lives on `feat/supabase-migration`. `main` stays untouched un
 
 ## Phase 1 — Schema Design *(3–5 days)*
 
-### Block 1.1: Map Mongoose → Postgres tables
+### Block 1.1: Map Mongoose → Postgres tables — **DONE**
 
-| Mongoose model | Postgres table | Notes |
+Full mapping lives in **[`docs/schema-mapping.md`](docs/schema-mapping.md)**. Summary:
+
+| Mongoose model | Postgres table(s) | Notes |
 |---|---|---|
-| User | `profiles` (extends `auth.users`) | Supabase Auth owns `auth.users`; `profiles` 1:1 |
-| Student, Faculty, Parent, Doctor, DispensaryStaff | `profiles` + role-specific tables | Separate tables per role for clean RLS |
+| User + Student | `profiles` + `students` (merged) | legacy `User` collection consolidated into `students`; one row per student in both |
+| Faculty | `profiles` + `faculty` | HODs = faculty with `profiles.role='hod'` + `hod_department` set |
+| Parent | `profiles` + `parents` + `parent_student_links` | M:N parent↔student via link table |
+| Doctor + DispensaryStaff | `profiles` + `dispensary_staff` (merged) + `staff_availability` | `Doctor` merged in as `staff_type='medical_officer'`; per-day availability as child table |
 | OTP | **deleted** | Supabase Auth handles natively |
-| Prescription | `prescriptions` | FK → patient, doctor |
-| Appointment | `appointments` | FK → student, doctor, slot |
-| InventoryItem | `inventory_items` | |
-| Ambulance, AmbulanceTrip | `ambulances`, `ambulance_trips` | trips FK → ambulance + driver |
-| LeaveDecision | `leave_decisions` | |
-| LoginLog | `login_logs` OR Supabase audit | decide later |
+| Prescription | `prescriptions` + `prescription_medications` | medications extracted from embedded array |
+| Appointment | `appointments` + `leave_requests` | `leaveRequest` subdoc extracted; embedded `prescription` blob removed (use `prescriptions.appointment_id` FK) |
+| InventoryItem | `inventory_items` | 1:1 |
+| Ambulance | `ambulances` + `ambulance_equipment` + `ambulance_maintenance_issues` | embedded arrays split out; `currentAssignment` removed (derived from trips) |
+| AmbulanceTrip | `ambulance_trips` + `ambulance_trip_status_log` | status history extracted, drives realtime feed |
+| LeaveDecision | `leave_decisions` | immutable audit (RLS denies UPDATE/DELETE) |
+| LoginLog | `login_logs` | `location`/`device` subdocs flattened to columns |
 
-### Block 1.2: Define enums + relations
-- [ ] `user_role` enum: `student | doctor | hod | admin | parent | dispensary_staff | faculty`
-- [ ] `prescription_status` enum
-- [ ] `appointment_status` enum
-- [ ] FK relationships with explicit `ON DELETE` per table
+### Block 1.2: Define enums + relations — **DONE**
 
-### Block 1.3: Initial migrations
-- [ ] `npx supabase migration new init_schema`
-- [ ] Write SQL per logical group (auth/profiles, clinical, inventory, ambulance, logs)
-- [ ] Apply locally + sample inserts
+Full enum list + FK `ON DELETE` matrix in **[`docs/enums-and-fks.md`](docs/enums-and-fks.md)**. 23 enum types, FK policy summary: `CASCADE` for profile/role chain and embedded children; `RESTRICT` for clinical (students→prescriptions/appointments) and dispatch (ambulance→trips) to block accidental data loss; `SET NULL` for "actor" FKs (doctor/driver/decider/updated_by) with denormalized name columns so audit survives staff turnover.
 
-### Block 1.4: RLS policy skeleton
-- [ ] Enable RLS on every table (default-deny)
-- [ ] Write policies per role:
-  - Students: own profile + own prescriptions + own appointments
-  - Doctors: read all students, write prescriptions
-  - HOD: department-scoped reads
-  - Admin: full access
-- [ ] Document policy decisions in `docs/rls-policies.md`
+### Block 1.3: Initial migrations — **DONE & APPLIED**
 
-**Deliverable:** local Supabase has full schema + RLS, no data yet.
+Six migration files in `supabase/migrations/` covering the full schema, in dependency order. RLS is enabled default-deny on every table; policies land in 1.4. All applied via Supabase MCP `apply_migration` on 2026-05-23; local filenames renamed to match server-assigned version stamps so `supabase db push` stays in sync.
+
+- [x] `20260522223631_init_extensions_and_enums.sql` — pgcrypto + citext + 23 enum types + `set_updated_at()` function
+- [x] `20260522223709_init_profiles_and_roles.sql` — profiles, students, faculty, parents, dispensary_staff, parent_student_links, staff_availability, medical_history + `auth.users → profiles` trigger
+- [x] `20260522223731_init_clinical.sql` — appointments, leave_requests, prescriptions, prescription_medications
+- [x] `20260522223735_init_inventory.sql` — inventory_items
+- [x] `20260522223757_init_ambulance.sql` — ambulances, equipment, maintenance_issues, trips, status_log
+- [x] `20260522223804_init_audit_logs.sql` — leave_decisions, login_logs (append-only, no `updated_at`)
+- [x] Validated: `list_tables` shows 20 tables, all RLS-enabled, 0 rows
+- [x] Advisors clean except: 20× `rls_enabled_no_policy` (expected — fixed in 1.4); 3 WARNs (`set_updated_at` mutable search_path, `handle_new_user` SECURITY DEFINER exposed via RPC, `citext` in public schema) — all addressed at start of 1.4
+- [ ] Sample inserts (deferred to 1.4 alongside RLS policy testing)
+
+### Block 1.4: RLS policy skeleton — **DONE & APPLIED**
+
+Three migrations applied via Supabase MCP on 2026-05-23. Full role × table matrix and trust model in **[`docs/rls-policies.md`](docs/rls-policies.md)**. Security advisors are clean (one residual lint is Supabase-managed `rls_auto_enable`).
+
+- [x] RLS already enabled default-deny in 1.3 — confirmed during 1.4 apply
+- [x] `20260522224507_phase14_hardening_and_helpers.sql` — fixes 1.3 warnings (`set_updated_at` search_path, lock down `handle_new_user`, move citext to `extensions`) + 11 RLS helper functions (`is_admin`, `is_doctor`, `is_dispensary_staff`, `is_hod`, `is_faculty`, `is_parent`, `is_student`, `hod_department`, `student_department(uuid)`, `parent_of_student(uuid)`, `current_role_v`)
+- [x] `20260522224804_phase14_rls_policies.sql` — full per-role policies for all 20 tables; append-only enforcement on `leave_decisions`, `login_logs`, `ambulance_trip_status_log`; `BEFORE UPDATE` trigger `guard_parents_verification` blocks non-admin writes to `parents.is_verified*`
+- [x] `20260522224952_phase14_move_helpers_to_private.sql` — moves helpers + guard trigger fn to `app_private` schema so they're not exposed via PostgREST `/rest/v1/rpc/*`; OIDs preserved so policies/trigger keep working
+- [x] `20260522225738_phase14_perf_pass.sql` — adds 9 covering indexes for actor/audit FKs; recreates every policy with `(select auth.uid())` initplan pattern (clears 34× `auth_rls_initplan` WARN at scale)
+- [x] `docs/rls-policies.md` published
+
+**Known residual lints (accepted):**
+- 1× `rls_auto_enable` SECURITY DEFINER warning — Supabase-managed event trigger function, not ours.
+- 1× `multiple_permissive_policies` WARN on `profiles.UPDATE` — by design (self vs. admin split for role-escalation guard).
+- N× `unused_index` INFO — expected on empty DB.
+
+**Deliverable:** schema + RLS live on `wlkwirmormsspyxgkfqg`. Empty database, ready for Phase 2 (auth migration).
 
 ---
 
