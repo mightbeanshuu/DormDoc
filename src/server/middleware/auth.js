@@ -3,6 +3,7 @@ const { supabaseAdmin, supabaseForUser } = require('../db/supabase');
 
 const DEV_STUDENT_UUID = '00000000-0000-0000-0000-000000000001';
 const DEV_HOD_UUID = '00000000-0000-0000-0000-000000000002';
+const DEV_ADMIN_UUID = '00000000-0000-0000-0000-000000000003';
 
 const devStudentUser = {
   id: DEV_STUDENT_UUID,
@@ -30,6 +31,17 @@ const devHodUser = {
     canViewMedicalHistory: true,
     canExportReports: true,
   },
+};
+
+const devAdminUser = {
+  id: DEV_ADMIN_UUID,
+  _id: DEV_ADMIN_UUID,
+  name: 'Test Admin',
+  email: 'dev-admin@bitmesra.local',
+  role: 'admin',
+  staffId: 'BIT-DISP-ADMIN-001',
+  staffType: 'admin_staff',
+  designation: 'Admin',
 };
 
 // Pull the role-specific row alongside the profile so downstream routes see the
@@ -117,6 +129,11 @@ const authenticateToken = async (req, res, next) => {
     }
     if (isDev && token === 'hod_dev_token') {
       req.user = devHodUser;
+      req.sb = supabaseAdmin;
+      return next();
+    }
+    if (isDev && token === 'admin_dev_token') {
+      req.user = devAdminUser;
       req.sb = supabaseAdmin;
       return next();
     }

@@ -3,355 +3,212 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
-const { authenticateToken } = require('../middleware/auth');
-const InventoryItem = require('../models/InventoryItem');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Configure multer for CSV uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = path.join(__dirname, '../uploads/csv');
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
+    if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
+  },
 });
 
 const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'text/csv' || path.extname(file.originalname).toLowerCase() === '.csv') {
       return cb(null, true);
-    } else {
-      cb(new Error('Only CSV files are allowed'));
     }
-  }
+    cb(new Error('Only CSV files are allowed'));
+  },
 });
 
-// Apply authentication to all routes
 router.use(authenticateToken);
+router.use(requireRole(['admin']));
 
-// @route   GET /api/admin/inventory
-// @desc    Get all inventory items
-// @access  Private (Admin only)
+// Mongoose treated currentStock as required (no default) but the new Postgres
+// schema has NOT NULL on description/supplier/batch_number with no defaults.
+// Coerce undefined → '' on those fields so old clients keep working.
+const toRow = (body, addedBy) => ({
+  name: body.name,
+  category: body.category || 'medication',
+  description: body.description ?? '',
+  current_stock: parseInt(body.currentStock, 10) || 0,
+  minimum_stock: parseInt(body.minimumStock, 10) || 0,
+  maximum_stock: parseInt(body.maximumStock, 10) || 0,
+  unit_price: parseFloat(body.unitPrice) || 0,
+  supplier: body.supplier ?? '',
+  expiry_date: body.expiryDate || null,
+  batch_number: body.batchNumber ?? '',
+  added_by: addedBy,
+});
+
+const toPatch = (body, updatedBy) => {
+  const patch = { updated_by: updatedBy };
+  if (body.name !== undefined) patch.name = body.name;
+  if (body.category !== undefined) patch.category = body.category;
+  if (body.description !== undefined) patch.description = body.description;
+  if (body.currentStock !== undefined) patch.current_stock = parseInt(body.currentStock, 10);
+  if (body.minimumStock !== undefined) patch.minimum_stock = parseInt(body.minimumStock, 10);
+  if (body.maximumStock !== undefined) patch.maximum_stock = parseInt(body.maximumStock, 10);
+  if (body.unitPrice !== undefined) patch.unit_price = parseFloat(body.unitPrice);
+  if (body.supplier !== undefined) patch.supplier = body.supplier;
+  if (body.expiryDate !== undefined) patch.expiry_date = body.expiryDate || null;
+  if (body.batchNumber !== undefined) patch.batch_number = body.batchNumber;
+  return patch;
+};
+
 router.get('/admin/inventory', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const inventoryItems = await InventoryItem.find().sort({ name: 1 });
-    res.json(inventoryItems);
-  } catch (error) {
-    console.error('Get inventory error:', error);
-    res.status(500).json({ message: 'Server error fetching inventory' });
-  }
+  const { data, error } = await req.sb.from('inventory_items').select('*').order('name');
+  if (error) return res.status(500).json({ message: error.message });
+  res.json(data);
 });
 
-// @route   POST /api/admin/inventory
-// @desc    Add new inventory item
-// @access  Private (Admin only)
 router.post('/admin/inventory', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const {
-      name,
-      category,
-      description,
-      currentStock,
-      minimumStock,
-      maximumStock,
-      unitPrice,
-      supplier,
-      expiryDate,
-      batchNumber
-    } = req.body;
-
-    if (!name || !category || !currentStock || !minimumStock || !maximumStock) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
-    }
-
-    const inventoryItem = new InventoryItem({
-      name,
-      category,
-      description,
-      currentStock: parseInt(currentStock),
-      minimumStock: parseInt(minimumStock),
-      maximumStock: parseInt(maximumStock),
-      unitPrice: parseFloat(unitPrice) || 0,
-      supplier,
-      expiryDate: expiryDate ? new Date(expiryDate) : null,
-      batchNumber,
-      addedBy: req.user.id
-    });
-
-    await inventoryItem.save();
-    res.json(inventoryItem);
-  } catch (error) {
-    console.error('Add inventory item error:', error);
-    res.status(500).json({ message: 'Server error adding inventory item' });
+  const { name, category, currentStock, minimumStock, maximumStock } = req.body;
+  if (!name || !category || currentStock === undefined || minimumStock === undefined || maximumStock === undefined) {
+    return res.status(400).json({ message: 'Please provide all required fields' });
   }
+  const { data, error } = await req.sb
+    .from('inventory_items')
+    .insert(toRow(req.body, req.user.id))
+    .select()
+    .single();
+  if (error) return res.status(500).json({ message: error.message });
+  res.json(data);
 });
 
-// @route   PUT /api/admin/inventory/:id
-// @desc    Update inventory item
-// @access  Private (Admin only)
 router.put('/admin/inventory/:id', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const {
-      name,
-      category,
-      description,
-      currentStock,
-      minimumStock,
-      maximumStock,
-      unitPrice,
-      supplier,
-      expiryDate,
-      batchNumber
-    } = req.body;
-
-    const inventoryItem = await InventoryItem.findById(req.params.id);
-    if (!inventoryItem) {
-      return res.status(404).json({ message: 'Inventory item not found' });
-    }
-
-    inventoryItem.name = name || inventoryItem.name;
-    inventoryItem.category = category || inventoryItem.category;
-    inventoryItem.description = description || inventoryItem.description;
-    inventoryItem.currentStock = parseInt(currentStock) || inventoryItem.currentStock;
-    inventoryItem.minimumStock = parseInt(minimumStock) || inventoryItem.minimumStock;
-    inventoryItem.maximumStock = parseInt(maximumStock) || inventoryItem.maximumStock;
-    inventoryItem.unitPrice = parseFloat(unitPrice) || inventoryItem.unitPrice;
-    inventoryItem.supplier = supplier || inventoryItem.supplier;
-    inventoryItem.expiryDate = expiryDate ? new Date(expiryDate) : inventoryItem.expiryDate;
-    inventoryItem.batchNumber = batchNumber || inventoryItem.batchNumber;
-    inventoryItem.updatedBy = req.user.id;
-    inventoryItem.updatedAt = new Date();
-
-    await inventoryItem.save();
-    res.json(inventoryItem);
-  } catch (error) {
-    console.error('Update inventory item error:', error);
-    res.status(500).json({ message: 'Server error updating inventory item' });
-  }
+  const { data, error } = await req.sb
+    .from('inventory_items')
+    .update(toPatch(req.body, req.user.id))
+    .eq('id', req.params.id)
+    .select()
+    .maybeSingle();
+  if (error) return res.status(500).json({ message: error.message });
+  if (!data) return res.status(404).json({ message: 'Inventory item not found' });
+  res.json(data);
 });
 
-// @route   DELETE /api/admin/inventory/:id
-// @desc    Delete inventory item
-// @access  Private (Admin only)
 router.delete('/admin/inventory/:id', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const inventoryItem = await InventoryItem.findById(req.params.id);
-    if (!inventoryItem) {
-      return res.status(404).json({ message: 'Inventory item not found' });
-    }
-
-    await InventoryItem.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Inventory item deleted successfully' });
-  } catch (error) {
-    console.error('Delete inventory item error:', error);
-    res.status(500).json({ message: 'Server error deleting inventory item' });
-  }
+  const { error, count } = await req.sb
+    .from('inventory_items')
+    .delete({ count: 'exact' })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ message: error.message });
+  if (count === 0) return res.status(404).json({ message: 'Inventory item not found' });
+  res.json({ message: 'Inventory item deleted successfully' });
 });
 
-// @route   POST /api/admin/inventory/upload-csv
-// @desc    Upload CSV file for bulk inventory update
-// @access  Private (Admin only)
 router.post('/admin/inventory/upload-csv', upload.single('csvFile'), async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
+  if (!req.file) return res.status(400).json({ message: 'No CSV file uploaded' });
 
-    if (!req.file) {
-      return res.status(400).json({ message: 'No CSV file uploaded' });
-    }
+  const results = [];
+  const errors = [];
 
-    const results = [];
-    const errors = [];
-
-    fs.createReadStream(req.file.path)
-      .pipe(csv())
-      .on('data', (data) => {
-        results.push(data);
-      })
-      .on('end', async () => {
-        try {
-          for (const row of results) {
-            try {
-              const inventoryItem = new InventoryItem({
-                name: row.name,
-                category: row.category || 'medication',
-                description: row.description || '',
-                currentStock: parseInt(row.currentStock) || 0,
-                minimumStock: parseInt(row.minimumStock) || 0,
-                maximumStock: parseInt(row.maximumStock) || 0,
-                unitPrice: parseFloat(row.unitPrice) || 0,
-                supplier: row.supplier || '',
-                expiryDate: row.expiryDate ? new Date(row.expiryDate) : null,
-                batchNumber: row.batchNumber || '',
-                addedBy: req.user.id
-              });
-
-              await inventoryItem.save();
-            } catch (itemError) {
-              errors.push({
-                row: row,
-                error: itemError.message
-              });
-            }
-          }
-
-          // Clean up uploaded file
-          fs.unlinkSync(req.file.path);
-
-          res.json({
-            message: 'CSV file processed successfully',
-            totalRows: results.length,
-            successCount: results.length - errors.length,
-            errorCount: errors.length,
-            errors: errors
-          });
-        } catch (error) {
-          console.error('CSV processing error:', error);
-          res.status(500).json({ message: 'Error processing CSV file' });
+  fs.createReadStream(req.file.path)
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      try {
+        for (const row of results) {
+          const { error } = await req.sb.from('inventory_items').insert(toRow(row, req.user.id));
+          if (error) errors.push({ row, error: error.message });
         }
-      });
-  } catch (error) {
-    console.error('CSV upload error:', error);
-    res.status(500).json({ message: 'Server error uploading CSV file' });
-  }
-});
-
-// @route   GET /api/admin/inventory/export-csv
-// @desc    Export inventory to CSV
-// @access  Private (Admin only)
-router.get('/admin/inventory/export-csv', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const inventoryItems = await InventoryItem.find().sort({ name: 1 });
-
-    // Create CSV content
-    const csvHeader = 'Name,Category,Description,Current Stock,Minimum Stock,Maximum Stock,Unit Price,Supplier,Expiry Date,Batch Number,Status\n';
-    const csvRows = inventoryItems.map(item => {
-      const status = item.currentStock === 0 ? 'Out of Stock' :
-                   item.currentStock <= item.minimumStock ? 'Low Stock' :
-                   new Date(item.expiryDate) < new Date() ? 'Expired' : 'In Stock';
-      
-      return `"${item.name}","${item.category}","${item.description}","${item.currentStock}","${item.minimumStock}","${item.maximumStock}","${item.unitPrice}","${item.supplier}","${item.expiryDate ? item.expiryDate.toISOString().split('T')[0] : ''}","${item.batchNumber}","${status}"`;
-    }).join('\n');
-
-    const csvContent = csvHeader + csvRows;
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="inventory.csv"');
-    res.send(csvContent);
-  } catch (error) {
-    console.error('CSV export error:', error);
-    res.status(500).json({ message: 'Server error exporting CSV' });
-  }
-});
-
-// @route   GET /api/admin/inventory/low-stock
-// @desc    Get low stock items
-// @access  Private (Admin only)
-router.get('/admin/inventory/low-stock', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const lowStockItems = await InventoryItem.find({
-      $expr: { $lte: ['$currentStock', '$minimumStock'] }
-    }).sort({ currentStock: 1 });
-
-    res.json(lowStockItems);
-  } catch (error) {
-    console.error('Get low stock items error:', error);
-    res.status(500).json({ message: 'Server error fetching low stock items' });
-  }
-});
-
-// @route   GET /api/admin/inventory/expired
-// @desc    Get expired items
-// @access  Private (Admin only)
-router.get('/admin/inventory/expired', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const expiredItems = await InventoryItem.find({
-      expiryDate: { $lt: new Date() }
-    }).sort({ expiryDate: 1 });
-
-    res.json(expiredItems);
-  } catch (error) {
-    console.error('Get expired items error:', error);
-    res.status(500).json({ message: 'Server error fetching expired items' });
-  }
-});
-
-// @route   PUT /api/admin/inventory/:id/stock
-// @desc    Update stock level
-// @access  Private (Admin only)
-router.put('/admin/inventory/:id/stock', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const { currentStock, operation, quantity } = req.body;
-
-    const inventoryItem = await InventoryItem.findById(req.params.id);
-    if (!inventoryItem) {
-      return res.status(404).json({ message: 'Inventory item not found' });
-    }
-
-    if (currentStock !== undefined) {
-      inventoryItem.currentStock = parseInt(currentStock);
-    } else if (operation && quantity) {
-      const qty = parseInt(quantity);
-      if (operation === 'add') {
-        inventoryItem.currentStock += qty;
-      } else if (operation === 'subtract') {
-        inventoryItem.currentStock = Math.max(0, inventoryItem.currentStock - qty);
+        fs.unlinkSync(req.file.path);
+        res.json({
+          message: 'CSV file processed successfully',
+          totalRows: results.length,
+          successCount: results.length - errors.length,
+          errorCount: errors.length,
+          errors,
+        });
+      } catch (error) {
+        console.error('CSV processing error:', error);
+        res.status(500).json({ message: 'Error processing CSV file' });
       }
-    }
+    });
+});
 
-    inventoryItem.updatedBy = req.user.id;
-    inventoryItem.updatedAt = new Date();
+router.get('/admin/inventory/export-csv', async (req, res) => {
+  const { data, error } = await req.sb.from('inventory_items').select('*').order('name');
+  if (error) return res.status(500).json({ message: error.message });
 
-    await inventoryItem.save();
-    res.json(inventoryItem);
-  } catch (error) {
-    console.error('Update stock error:', error);
-    res.status(500).json({ message: 'Server error updating stock' });
+  const header = 'Name,Category,Description,Current Stock,Minimum Stock,Maximum Stock,Unit Price,Supplier,Expiry Date,Batch Number,Status\n';
+  const today = new Date();
+  const rows = (data || []).map((item) => {
+    const status =
+      item.current_stock === 0
+        ? 'Out of Stock'
+        : item.current_stock <= item.minimum_stock
+        ? 'Low Stock'
+        : item.expiry_date && new Date(item.expiry_date) < today
+        ? 'Expired'
+        : 'In Stock';
+    const expiry = item.expiry_date ? new Date(item.expiry_date).toISOString().split('T')[0] : '';
+    return `"${item.name}","${item.category}","${item.description}","${item.current_stock}","${item.minimum_stock}","${item.maximum_stock}","${item.unit_price}","${item.supplier}","${expiry}","${item.batch_number}","${status}"`;
+  });
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="inventory.csv"');
+  res.send(header + rows.join('\n'));
+});
+
+// PostgREST can't filter by `column <= other_column`. Pull the rows and filter
+// in node — fine until the catalog gets huge, then a view/RPC takes over.
+router.get('/admin/inventory/low-stock', async (req, res) => {
+  const { data, error } = await req.sb
+    .from('inventory_items')
+    .select('*')
+    .order('current_stock', { ascending: true });
+  if (error) return res.status(500).json({ message: error.message });
+  res.json((data || []).filter((it) => it.current_stock <= it.minimum_stock));
+});
+
+router.get('/admin/inventory/expired', async (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  const { data, error } = await req.sb
+    .from('inventory_items')
+    .select('*')
+    .lt('expiry_date', today)
+    .order('expiry_date', { ascending: true });
+  if (error) return res.status(500).json({ message: error.message });
+  res.json(data || []);
+});
+
+router.put('/admin/inventory/:id/stock', async (req, res) => {
+  const { currentStock, operation, quantity } = req.body;
+  const { data: item, error: readErr } = await req.sb
+    .from('inventory_items')
+    .select('current_stock')
+    .eq('id', req.params.id)
+    .maybeSingle();
+  if (readErr) return res.status(500).json({ message: readErr.message });
+  if (!item) return res.status(404).json({ message: 'Inventory item not found' });
+
+  let next = item.current_stock;
+  if (currentStock !== undefined) {
+    next = parseInt(currentStock, 10);
+  } else if (operation && quantity) {
+    const qty = parseInt(quantity, 10);
+    next = operation === 'add' ? item.current_stock + qty : Math.max(0, item.current_stock - qty);
   }
+
+  const { data, error } = await req.sb
+    .from('inventory_items')
+    .update({ current_stock: next, updated_by: req.user.id })
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ message: error.message });
+  res.json(data);
 });
 
 module.exports = router;
