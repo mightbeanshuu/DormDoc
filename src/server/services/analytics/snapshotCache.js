@@ -31,7 +31,7 @@ function getOrRun(key, req, computeFn) {
     const cached = get(key);
     if (cached) return Promise.resolve(cached);
   }
-  return computeFn().then((result) => {
+  return computeFn(req).then((result) => {
     set(key, result);
     return result;
   });

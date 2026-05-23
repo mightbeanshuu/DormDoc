@@ -1,64 +1,57 @@
-const User = require('../../models/User');
-const Appointment = require('../../models/Appointment');
 const cache = require('./snapshotCache');
 
 const CACHE_KEY = 'analytics:growth';
 
-async function compute() {
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+function monthKey(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
-  const [totalUsers, registrationsByMonth, roleDistribution, activeFromAppointments, activeFromLeave] =
-    await Promise.all([
-      // Total users
-      User.countDocuments(),
+async function compute(req) {
+  const sb = req.sb;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      // Registrations by month
-      User.aggregate([
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-        { $project: { month: '$_id', count: 1, _id: 0 } },
-      ]),
+  const [
+    { count: totalUsers },
+    { data: profileRows },
+    { data: appointmentRows },
+    { data: leaveRows },
+  ] = await Promise.all([
+    sb.from('profiles').select('id', { count: 'exact', head: true }),
+    sb.from('profiles').select('created_at, role'),
+    sb.from('appointments').select('student_id').gte('appointment_date', thirtyDaysAgo.slice(0, 10)),
+    sb.from('leave_requests').select('student_id').gte('created_at', thirtyDaysAgo),
+  ]);
 
-      // Role distribution
-      User.aggregate([
-        {
-          $group: {
-            _id: '$role',
-            count: { $sum: 1 },
-          },
-        },
-        { $project: { role: '$_id', count: 1, _id: 0 } },
-      ]),
+  // Registrations by month
+  const monthMap = new Map();
+  for (const r of profileRows || []) {
+    if (!r.created_at) continue;
+    const m = monthKey(r.created_at);
+    monthMap.set(m, (monthMap.get(m) || 0) + 1);
+  }
+  const registrationsByMonth = [...monthMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, count]) => ({ month, count }));
 
-      // Distinct students with ≥1 appointment in last 30 days
-      Appointment.distinct('student', {
-        appointmentDate: { $gte: thirtyDaysAgo },
-      }),
+  // Role distribution
+  const roleMap = new Map();
+  for (const r of profileRows || []) {
+    const role = r.role || 'unknown';
+    roleMap.set(role, (roleMap.get(role) || 0) + 1);
+  }
+  const roleDistribution = [...roleMap.entries()].map(([role, count]) => ({ role, count }));
 
-      // Distinct students with ≥1 leave request in last 30 days
-      Appointment.distinct('student', {
-        'leaveRequest.requested': true,
-        createdAt: { $gte: thirtyDaysAgo },
-      }),
-    ]);
-
-  // Union the two sets for active users
-  const activeUserIds = new Set([
-    ...activeFromAppointments.map(String),
-    ...activeFromLeave.map(String),
+  const activeIds = new Set([
+    ...(appointmentRows || []).map((a) => a.student_id).filter(Boolean),
+    ...(leaveRows || []).map((l) => l.student_id).filter(Boolean),
   ]);
 
   return {
-    totalUsers,
+    totalUsers: totalUsers || 0,
     registrationsByMonth,
     roleDistribution,
-    activeUsers: activeUserIds.size,
+    activeUsers: activeIds.size,
   };
 }
 

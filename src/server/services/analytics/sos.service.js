@@ -1,71 +1,40 @@
-const Appointment = require('../../models/Appointment');
-const AmbulanceTrip = require('../../models/AmbulanceTrip');
 const cache = require('./snapshotCache');
 
 const CACHE_KEY = 'analytics:sos';
 
-async function compute() {
-  const [emergencyAppointments, ambulanceTrips] = await Promise.all([
-    // Emergency appointments — count + monthly trend
-    Appointment.aggregate([
-      { $match: { isEmergency: true } },
-      {
-        $facet: {
-          total: [{ $count: 'count' }],
-          trend: [
-            {
-              $group: {
-                _id: { $dateToString: { format: '%Y-%m', date: '$appointmentDate' } },
-                count: { $sum: 1 },
-              },
-            },
-            { $sort: { _id: 1 } },
-            { $project: { month: '$_id', count: 1, _id: 0 } },
-          ],
-        },
-      },
-    ]),
+function monthKey(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
-    // Ambulance trips — count + monthly trend
-    AmbulanceTrip.aggregate([
-      {
-        $facet: {
-          total: [{ $count: 'count' }],
-          trend: [
-            {
-              $group: {
-                _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-                count: { $sum: 1 },
-              },
-            },
-            { $sort: { _id: 1 } },
-            { $project: { month: '$_id', count: 1, _id: 0 } },
-          ],
-        },
-      },
-    ]),
+async function compute(req) {
+  const sb = req.sb;
+
+  const [{ data: emergencyAppts }, { data: trips }] = await Promise.all([
+    sb.from('appointments').select('appointment_date').eq('is_emergency', true),
+    sb.from('ambulance_trips').select('created_at'),
   ]);
 
-  const emResult = emergencyAppointments[0] || { total: [], trend: [] };
-  const atResult = ambulanceTrips[0] || { total: [], trend: [] };
-
-  const emergencyTotal = emResult.total[0]?.count || 0;
-  const ambulanceTotal = atResult.total[0]?.count || 0;
-
-  // Merge monthly trends from both sources
   const trendMap = new Map();
-  for (const entry of [...emResult.trend, ...atResult.trend]) {
-    trendMap.set(entry.month, (trendMap.get(entry.month) || 0) + entry.count);
+  for (const r of emergencyAppts || []) {
+    if (!r.appointment_date) continue;
+    const m = monthKey(r.appointment_date);
+    trendMap.set(m, (trendMap.get(m) || 0) + 1);
   }
-  const combinedTrend = Array.from(trendMap.entries())
-    .map(([month, count]) => ({ month, count }))
-    .sort((a, b) => a.month.localeCompare(b.month));
+  for (const r of trips || []) {
+    if (!r.created_at) continue;
+    const m = monthKey(r.created_at);
+    trendMap.set(m, (trendMap.get(m) || 0) + 1);
+  }
+  const frequencyTrend = [...trendMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, count]) => ({ month, count }));
 
   return {
-    totalSOS: emergencyTotal + ambulanceTotal,
-    emergencyAppointments: emergencyTotal,
-    ambulanceTrips: ambulanceTotal,
-    frequencyTrend: combinedTrend,
+    totalSOS: (emergencyAppts || []).length + (trips || []).length,
+    emergencyAppointments: (emergencyAppts || []).length,
+    ambulanceTrips: (trips || []).length,
+    frequencyTrend,
   };
 }
 
