@@ -1,238 +1,331 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken } = require('../middleware/auth');
-const Ambulance = require('../models/Ambulance');
-const Appointment = require('../models/Appointment');
-const User = require('../models/User');
 
 const router = express.Router();
 
-// Apply authentication to all routes
 router.use(authenticateToken);
 
-// @route   GET /api/ambulance/status
-// @desc    Get all ambulance status
-// @access  Private
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+const ACTIVE_TRIP_STATUSES = ['pending', 'dispatched', 'en_route', 'arrived'];
+const EARTH_RADIUS_KM = 6371;
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(Number(lat2) - Number(lat1));
+  const dLon = toRad(Number(lon2) - Number(lon1));
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(Number(lat1))) * Math.cos(toRad(Number(lat2))) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+}
+
+function calculateEstimatedWaitTime(ambulance, pickupLocation) {
+  const distance = haversineKm(
+    ambulance.latitude,
+    ambulance.longitude,
+    pickupLocation.latitude,
+    pickupLocation.longitude
+  );
+  const minutes = Math.round((distance / 30) * 60); // 30 km/h
+  return Math.max(5, minutes);
+}
+
+function emitIo(req, event, payload) {
+  if (req.io) req.io.emit(event, payload);
+}
+
+async function getCurrentAssignment(sb, ambulanceId) {
+  const { data } = await sb
+    .from('ambulance_trips')
+    .select('id, student_id, patient_name, pickup_location, destination, status, current_latitude, current_longitude, current_address, estimated_time, created_at')
+    .eq('ambulance_id', ambulanceId)
+    .in('status', ACTIVE_TRIP_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  return data?.[0] || null;
+}
+
+function toClientAmbulance(amb, currentAssignment) {
+  return {
+    _id: amb.id,
+    vehicleNumber: amb.vehicle_number,
+    driverName: amb.driver_name,
+    driverPhone: amb.driver_phone,
+    status: amb.status,
+    location: { latitude: amb.latitude, longitude: amb.longitude, address: amb.address },
+    currentAssignment: currentAssignment
+      ? {
+          student: currentAssignment.student_id,
+          patientName: currentAssignment.patient_name,
+          pickupLocation: currentAssignment.pickup_location,
+          destination: currentAssignment.destination,
+          tripStatus: currentAssignment.status,
+          estimatedArrival: currentAssignment.estimated_time,
+          tripId: currentAssignment.id,
+        }
+      : null,
+    performance: {
+      totalTrips: amb.total_trips,
+      averageResponseTime: amb.average_response_time,
+      rating: amb.rating,
+      totalRating: amb.total_rating,
+      ratingCount: amb.rating_count,
+    },
+  };
+}
+
+// ─── routes ─────────────────────────────────────────────────────────────────
+
 router.get('/status', async (req, res) => {
   try {
-    const ambulances = await Ambulance.find({ isActive: true })
-      .select('vehicleNumber driverName status location currentAssignment performance')
-      .sort({ status: 1, vehicleNumber: 1 });
+    const sb = req.sb;
+    const { data: ambulances, error } = await sb
+      .from('ambulances')
+      .select('*')
+      .eq('is_active', true)
+      .order('status', { ascending: true })
+      .order('vehicle_number', { ascending: true });
+    if (error) throw error;
 
-    res.json({ ambulances });
+    const enriched = await Promise.all(
+      (ambulances || []).map(async (a) => toClientAmbulance(a, await getCurrentAssignment(sb, a.id)))
+    );
+    res.json({ ambulances: enriched });
   } catch (error) {
     console.error('Get ambulance status error:', error);
     res.status(500).json({ message: 'Server error fetching ambulance status' });
   }
 });
 
-// @route   GET /api/ambulance/available
-// @desc    Get available ambulances near location
-// @access  Private
 router.get('/available', async (req, res) => {
   try {
+    const sb = req.sb;
     const { latitude, longitude, maxDistance = 10 } = req.query;
-
     if (!latitude || !longitude) {
       return res.status(400).json({ message: 'Latitude and longitude are required' });
     }
 
-    const availableAmbulances = await Ambulance.findNearestAvailable(
-      parseFloat(latitude),
-      parseFloat(longitude),
-      parseFloat(maxDistance)
-    );
+    const { data: ambulances } = await sb
+      .from('ambulances')
+      .select('*')
+      .eq('status', 'available')
+      .eq('is_active', true);
 
-    res.json({ availableAmbulances });
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    const max = parseFloat(maxDistance);
+
+    const ranked = (ambulances || [])
+      .map((a) => ({ ambulance: a, distance: haversineKm(a.latitude, a.longitude, lat, lon) }))
+      .filter((x) => x.distance <= max)
+      .sort((a, b) => a.distance - b.distance)
+      .map((x) => ({ ...toClientAmbulance(x.ambulance, null), distanceKm: x.distance }));
+
+    res.json({ availableAmbulances: ranked });
   } catch (error) {
     console.error('Get available ambulances error:', error);
     res.status(500).json({ message: 'Server error fetching available ambulances' });
   }
 });
 
-// @route   POST /api/ambulance/request
-// @desc    Request ambulance service
-// @access  Private
-router.post('/request', [
-  body('symptoms').notEmpty().withMessage('Symptoms description is required'),
-  body('pickupLocation.latitude').isNumeric().withMessage('Pickup latitude is required'),
-  body('pickupLocation.longitude').isNumeric().withMessage('Pickup longitude is required'),
-  body('pickupLocation.address').notEmpty().withMessage('Pickup address is required'),
-  body('destination.latitude').optional().isNumeric().withMessage('Destination latitude must be numeric'),
-  body('destination.longitude').optional().isNumeric().withMessage('Destination longitude must be numeric'),
-  body('destination.address').optional().isString().withMessage('Destination address must be string'),
-  body('isEmergency').optional().isBoolean().withMessage('Emergency flag must be boolean')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+router.post(
+  '/request',
+  [
+    body('symptoms').notEmpty().withMessage('Symptoms description is required'),
+    body('pickupLocation.latitude').isNumeric().withMessage('Pickup latitude is required'),
+    body('pickupLocation.longitude').isNumeric().withMessage('Pickup longitude is required'),
+    body('pickupLocation.address').notEmpty().withMessage('Pickup address is required'),
+    body('destination.latitude').optional().isNumeric().withMessage('Destination latitude must be numeric'),
+    body('destination.longitude').optional().isNumeric().withMessage('Destination longitude must be numeric'),
+    body('destination.address').optional().isString().withMessage('Destination address must be string'),
+    body('isEmergency').optional().isBoolean().withMessage('Emergency flag must be boolean'),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const {
-      symptoms,
-      pickupLocation,
-      destination,
-      isEmergency = false,
-      priority = 5
-    } = req.body;
+      const sb = req.sb;
+      const { symptoms, pickupLocation, destination, isEmergency = false } = req.body;
+      const student = req.user;
 
-    const studentId = req.user._id;
+      const { data: candidates } = await sb
+        .from('ambulances')
+        .select('*')
+        .eq('status', 'available')
+        .eq('is_active', true);
 
-    // Find nearest available ambulance
-    const nearestAmbulances = await Ambulance.findNearestAvailable(
-      pickupLocation.latitude,
-      pickupLocation.longitude,
-      20 // Extended search radius
-    );
+      if (!candidates || !candidates.length) {
+        return res.status(400).json({ message: 'No ambulances available at the moment', estimatedWaitTime: 'Unknown' });
+      }
 
-    if (nearestAmbulances.length === 0) {
-      return res.status(400).json({
-        message: 'No ambulances available at the moment',
-        estimatedWaitTime: 'Unknown'
+      const ranked = candidates
+        .map((a) => ({ ambulance: a, distance: haversineKm(a.latitude, a.longitude, pickupLocation.latitude, pickupLocation.longitude) }))
+        .sort((a, b) => a.distance - b.distance);
+      const ambulance = ranked[0].ambulance;
+      const estimatedWaitMinutes = calculateEstimatedWaitTime(ambulance, pickupLocation);
+
+      const { data: trip, error: tripErr } = await sb
+        .from('ambulance_trips')
+        .insert({
+          patient_name: student.name || 'Student',
+          patient_phone: student.phone || '',
+          student_id: student.id,
+          pickup_location: pickupLocation.address,
+          destination: destination?.address || 'College Dispensary',
+          emergency_type: 'medical',
+          priority: isEmergency ? 'high' : 'medium',
+          ambulance_id: ambulance.id,
+          status: 'dispatched',
+          notes: symptoms,
+          estimated_time: estimatedWaitMinutes,
+          created_by: student.id,
+        })
+        .select()
+        .single();
+      if (tripErr) throw tripErr;
+
+      const { error: ambErr } = await sb.from('ambulances').update({ status: 'in_use' }).eq('id', ambulance.id);
+      if (ambErr) console.error('ambulance status update failed:', ambErr);
+
+      emitIo(req, 'ambulance-assigned', {
+        studentId: student.id,
+        ambulanceId: ambulance.id,
+        vehicleNumber: ambulance.vehicle_number,
+        driverName: ambulance.driver_name,
+        driverPhone: ambulance.driver_phone,
+        estimatedArrival: estimatedWaitMinutes,
+        tripId: trip.id,
       });
+
+      res.status(201).json({
+        message: 'Ambulance request submitted successfully',
+        ambulance: {
+          vehicleNumber: ambulance.vehicle_number,
+          driverName: ambulance.driver_name,
+          driverPhone: ambulance.driver_phone,
+          estimatedArrival: estimatedWaitMinutes,
+        },
+        trip,
+        estimatedWaitTime: estimatedWaitMinutes,
+      });
+    } catch (error) {
+      console.error('Ambulance request error:', error);
+      res.status(500).json({ message: 'Server error processing ambulance request' });
     }
-
-    const ambulance = nearestAmbulances[0];
-
-    // Assign ambulance to student
-    await ambulance.assignToStudent(studentId, pickupLocation, destination);
-
-    // Create appointment record
-    const appointment = new Appointment({
-      student: studentId,
-      appointmentDate: new Date(),
-      appointmentTime: new Date().toTimeString().slice(0, 5),
-      symptoms,
-      priority: isEmergency ? 10 : priority,
-      queueNumber: 1,
-      isEmergency,
-      status: 'scheduled'
-    });
-
-    await appointment.save();
-
-    // Emit real-time update
-    req.io.emit('ambulance-assigned', {
-      studentId,
-      ambulanceId: ambulance._id,
-      vehicleNumber: ambulance.vehicleNumber,
-      driverName: ambulance.driverName,
-      driverPhone: ambulance.driverPhone,
-      estimatedArrival: ambulance.currentAssignment.estimatedArrival,
-      appointmentId: appointment._id
-    });
-
-    res.status(201).json({
-      message: 'Ambulance request submitted successfully',
-      ambulance: {
-        vehicleNumber: ambulance.vehicleNumber,
-        driverName: ambulance.driverName,
-        driverPhone: ambulance.driverPhone,
-        estimatedArrival: ambulance.currentAssignment.estimatedArrival
-      },
-      appointment,
-      estimatedWaitTime: calculateEstimatedWaitTime(ambulance, pickupLocation)
-    });
-  } catch (error) {
-    console.error('Ambulance request error:', error);
-    res.status(500).json({ message: 'Server error processing ambulance request' });
   }
-});
+);
 
-// @route   PUT /api/ambulance/:id/update-location
-// @desc    Update ambulance location
-// @access  Private
-router.put('/:id/update-location', [
-  body('latitude').isNumeric().withMessage('Latitude is required'),
-  body('longitude').isNumeric().withMessage('Longitude is required'),
-  body('address').notEmpty().withMessage('Address is required')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+router.put(
+  '/:id/update-location',
+  [
+    body('latitude').isNumeric().withMessage('Latitude is required'),
+    body('longitude').isNumeric().withMessage('Longitude is required'),
+    body('address').notEmpty().withMessage('Address is required'),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+      const sb = req.sb;
+      const { id } = req.params;
+      const { latitude, longitude, address } = req.body;
+
+      const { data: ambulance } = await sb.from('ambulances').select('id').eq('id', id).maybeSingle();
+      if (!ambulance) return res.status(404).json({ message: 'Ambulance not found' });
+
+      const { error: updErr } = await sb
+        .from('ambulances')
+        .update({ latitude, longitude, address })
+        .eq('id', id);
+      if (updErr) throw updErr;
+
+      // If there's an active trip, mirror onto the trip's current_* fields
+      const active = await getCurrentAssignment(sb, id);
+      if (active) {
+        await sb
+          .from('ambulance_trips')
+          .update({ current_latitude: latitude, current_longitude: longitude, current_address: address })
+          .eq('id', active.id);
+      }
+
+      emitIo(req, 'ambulance-location-updated', {
+        ambulanceId: id,
+        location: { latitude, longitude, address },
+        timestamp: new Date(),
+      });
+
+      res.json({ message: 'Ambulance location updated successfully', location: { latitude, longitude, address } });
+    } catch (error) {
+      console.error('Update ambulance location error:', error);
+      res.status(500).json({ message: 'Server error updating ambulance location' });
     }
-
-    const ambulanceId = req.params.id;
-    const { latitude, longitude, address } = req.body;
-
-    const ambulance = await Ambulance.findById(ambulanceId);
-    if (!ambulance) {
-      return res.status(404).json({ message: 'Ambulance not found' });
-    }
-
-    await ambulance.updateLocation(latitude, longitude, address);
-
-    // Emit real-time location update
-    req.io.emit('ambulance-location-updated', {
-      ambulanceId: ambulance._id,
-      location: { latitude, longitude, address },
-      timestamp: new Date()
-    });
-
-    res.json({
-      message: 'Ambulance location updated successfully',
-      location: { latitude, longitude, address }
-    });
-  } catch (error) {
-    console.error('Update ambulance location error:', error);
-    res.status(500).json({ message: 'Server error updating ambulance location' });
   }
-});
+);
 
-// @route   PUT /api/ambulance/:id/complete-trip
-// @desc    Complete ambulance trip
-// @access  Private
 router.put('/:id/complete-trip', async (req, res) => {
   try {
-    const ambulanceId = req.params.id;
-    const { rating, feedback } = req.body;
+    const sb = req.sb;
+    const { id } = req.params;
+    const { rating } = req.body;
 
-    const ambulance = await Ambulance.findById(ambulanceId);
-    if (!ambulance) {
-      return res.status(404).json({ message: 'Ambulance not found' });
-    }
-
-    if (ambulance.status !== 'in-use') {
+    const { data: ambulance } = await sb.from('ambulances').select('*').eq('id', id).maybeSingle();
+    if (!ambulance) return res.status(404).json({ message: 'Ambulance not found' });
+    if (ambulance.status !== 'in_use') {
       return res.status(400).json({ message: 'Ambulance is not currently in use' });
     }
 
-    // Complete the assignment
-    await ambulance.completeAssignment();
+    const active = await getCurrentAssignment(sb, id);
+    if (active) {
+      await sb
+        .from('ambulance_trips')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', active.id);
+    }
 
-    // Update rating if provided
+    const updates = {
+      status: 'available',
+      total_trips: (ambulance.total_trips || 0) + 1,
+    };
+
     if (rating && rating >= 1 && rating <= 5) {
-      await ambulance.updateRating(rating);
+      const newCount = (ambulance.rating_count || 0) + 1;
+      const newTotal = (ambulance.total_rating || 0) + Number(rating);
+      updates.rating_count = newCount;
+      updates.total_rating = newTotal;
+      updates.rating = newTotal / newCount;
     }
 
-    // Update appointment status
-    const appointment = await Appointment.findOne({
-      student: ambulance.currentAssignment.student,
-      status: 'scheduled',
-      isEmergency: true
-    });
+    const { data: updated, error: updErr } = await sb
+      .from('ambulances')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (updErr) throw updErr;
 
-    if (appointment) {
-      appointment.status = 'completed';
-      appointment.checkOutTime = new Date();
-      await appointment.save();
-    }
-
-    // Emit real-time update
-    req.io.emit('ambulance-trip-completed', {
-      ambulanceId: ambulance._id,
-      vehicleNumber: ambulance.vehicleNumber,
-      status: ambulance.status
+    emitIo(req, 'ambulance-trip-completed', {
+      ambulanceId: id,
+      vehicleNumber: ambulance.vehicle_number,
+      status: updated.status,
     });
 
     res.json({
       message: 'Ambulance trip completed successfully',
       ambulance: {
-        vehicleNumber: ambulance.vehicleNumber,
-        status: ambulance.status,
-        performance: ambulance.performance
-      }
+        vehicleNumber: updated.vehicle_number,
+        status: updated.status,
+        performance: {
+          totalTrips: updated.total_trips,
+          averageResponseTime: updated.average_response_time,
+          rating: updated.rating,
+          totalRating: updated.total_rating,
+          ratingCount: updated.rating_count,
+        },
+      },
     });
   } catch (error) {
     console.error('Complete ambulance trip error:', error);
@@ -240,98 +333,61 @@ router.put('/:id/complete-trip', async (req, res) => {
   }
 });
 
-// @route   GET /api/ambulance/:id/tracking
-// @desc    Track ambulance location
-// @access  Private
 router.get('/:id/tracking', async (req, res) => {
   try {
-    const ambulanceId = req.params.id;
+    const sb = req.sb;
+    const { id } = req.params;
+    const { data: ambulance } = await sb.from('ambulances').select('*').eq('id', id).maybeSingle();
+    if (!ambulance) return res.status(404).json({ message: 'Ambulance not found' });
 
-    const ambulance = await Ambulance.findById(ambulanceId)
-      .select('vehicleNumber driverName status location currentAssignment performance');
-
-    if (!ambulance) {
-      return res.status(404).json({ message: 'Ambulance not found' });
-    }
-
-    res.json({
-      ambulance: {
-        vehicleNumber: ambulance.vehicleNumber,
-        driverName: ambulance.driverName,
-        status: ambulance.status,
-        location: ambulance.location,
-        currentAssignment: ambulance.currentAssignment,
-        performance: ambulance.performance
-      }
-    });
+    const active = await getCurrentAssignment(sb, id);
+    res.json({ ambulance: toClientAmbulance(ambulance, active) });
   } catch (error) {
     console.error('Track ambulance error:', error);
     res.status(500).json({ message: 'Server error tracking ambulance' });
   }
 });
 
-// @route   GET /api/ambulance/performance
-// @desc    Get ambulance performance statistics
-// @access  Private
 router.get('/performance', async (req, res) => {
   try {
+    const sb = req.sb;
     const { period = '30d' } = req.query;
-    
-    const endDate = new Date();
-    const startDate = new Date();
-    
-    switch (period) {
-      case '7d':
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      case '90d':
-        startDate.setDate(startDate.getDate() - 90);
-        break;
-      default:
-        startDate.setDate(startDate.getDate() - 30);
-    }
 
-    const performanceStats = await Ambulance.aggregate([
-      {
-        $project: {
-          vehicleNumber: 1,
-          driverName: 1,
-          totalTrips: '$performance.totalTrips',
-          averageResponseTime: '$performance.averageResponseTime',
-          rating: '$performance.rating',
-          totalRating: '$performance.totalRating',
-          ratingCount: '$performance.ratingCount'
-        }
-      },
-      {
-        $sort: { rating: -1, totalTrips: -1 }
-      }
-    ]);
+    const { data: ambulances } = await sb
+      .from('ambulances')
+      .select('id, vehicle_number, driver_name, total_trips, average_response_time, rating, total_rating, rating_count');
 
-    const overallStats = await Ambulance.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalAmbulances: { $sum: 1 },
-          averageRating: { $avg: '$performance.rating' },
-          totalTrips: { $sum: '$performance.totalTrips' },
-          averageResponseTime: { $avg: '$performance.averageResponseTime' }
-        }
-      }
-    ]);
+    const performanceStats = (ambulances || [])
+      .map((a) => ({
+        _id: a.id,
+        vehicleNumber: a.vehicle_number,
+        driverName: a.driver_name,
+        totalTrips: a.total_trips,
+        averageResponseTime: a.average_response_time,
+        rating: a.rating,
+        totalRating: a.total_rating,
+        ratingCount: a.rating_count,
+      }))
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.totalTrips || 0) - (a.totalTrips || 0));
+
+    const totalAmbulances = performanceStats.length;
+    const avgRating = totalAmbulances
+      ? performanceStats.reduce((s, a) => s + (a.rating || 0), 0) / totalAmbulances
+      : 0;
+    const totalTrips = performanceStats.reduce((s, a) => s + (a.totalTrips || 0), 0);
+    const avgResponse = totalAmbulances
+      ? performanceStats.reduce((s, a) => s + (a.averageResponseTime || 0), 0) / totalAmbulances
+      : 0;
 
     res.json({
       period,
       performanceStats,
-      overallStats: overallStats[0] || {
-        totalAmbulances: 0,
-        averageRating: 0,
-        totalTrips: 0,
-        averageResponseTime: 0
-      }
+      overallStats: {
+        totalAmbulances,
+        averageRating: avgRating,
+        totalTrips,
+        averageResponseTime: avgResponse,
+      },
     });
   } catch (error) {
     console.error('Get ambulance performance error:', error);
@@ -339,76 +395,51 @@ router.get('/performance', async (req, res) => {
   }
 });
 
-// @route   POST /api/ambulance/:id/report-issue
-// @desc    Report ambulance issue
-// @access  Private
-router.post('/:id/report-issue', [
-  body('description').notEmpty().withMessage('Issue description is required'),
-  body('severity').isIn(['low', 'medium', 'high', 'critical']).withMessage('Invalid severity level')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+router.post(
+  '/:id/report-issue',
+  [
+    body('description').notEmpty().withMessage('Issue description is required'),
+    body('severity').isIn(['low', 'medium', 'high', 'critical']).withMessage('Invalid severity level'),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const ambulanceId = req.params.id;
-    const { description, severity } = req.body;
+      const sb = req.sb;
+      const { id } = req.params;
+      const { description, severity } = req.body;
 
-    const ambulance = await Ambulance.findById(ambulanceId);
-    if (!ambulance) {
-      return res.status(404).json({ message: 'Ambulance not found' });
-    }
+      const { data: ambulance } = await sb.from('ambulances').select('id, vehicle_number, status').eq('id', id).maybeSingle();
+      if (!ambulance) return res.status(404).json({ message: 'Ambulance not found' });
 
-    // Add issue to maintenance record
-    ambulance.maintenance.issues.push({
-      description,
-      severity,
-      reportedAt: new Date()
-    });
+      const { data: issue, error: issueErr } = await sb
+        .from('ambulance_maintenance_issues')
+        .insert({ ambulance_id: id, description, severity })
+        .select()
+        .single();
+      if (issueErr) throw issueErr;
 
-    // Update ambulance status if critical issue
-    if (severity === 'critical') {
-      ambulance.status = 'maintenance';
-    }
-
-    await ambulance.save();
-
-    // Emit real-time alert
-    req.io.emit('ambulance-issue-reported', {
-      ambulanceId: ambulance._id,
-      vehicleNumber: ambulance.vehicleNumber,
-      issue: { description, severity },
-      timestamp: new Date()
-    });
-
-    res.json({
-      message: 'Issue reported successfully',
-      issue: {
-        description,
-        severity,
-        reportedAt: new Date()
+      if (severity === 'critical') {
+        await sb.from('ambulances').update({ status: 'maintenance' }).eq('id', id);
       }
-    });
-  } catch (error) {
-    console.error('Report ambulance issue error:', error);
-    res.status(500).json({ message: 'Server error reporting issue' });
-  }
-});
 
-// Helper function to calculate estimated wait time
-function calculateEstimatedWaitTime(ambulance, pickupLocation) {
-  const distance = ambulance.calculateDistance(
-    pickupLocation.latitude,
-    pickupLocation.longitude
-  );
-  
-  // Assume average speed of 30 km/h in city traffic
-  const averageSpeed = 30; // km/h
-  const timeInHours = distance / averageSpeed;
-  const timeInMinutes = Math.round(timeInHours * 60);
-  
-  return Math.max(5, timeInMinutes); // Minimum 5 minutes
-}
+      emitIo(req, 'ambulance-issue-reported', {
+        ambulanceId: id,
+        vehicleNumber: ambulance.vehicle_number,
+        issue: { description, severity },
+        timestamp: new Date(),
+      });
+
+      res.json({
+        message: 'Issue reported successfully',
+        issue: { _id: issue.id, description, severity, reportedAt: issue.reported_at },
+      });
+    } catch (error) {
+      console.error('Report ambulance issue error:', error);
+      res.status(500).json({ message: 'Server error reporting issue' });
+    }
+  }
+);
 
 module.exports = router;

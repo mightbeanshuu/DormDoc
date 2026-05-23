@@ -37,11 +37,11 @@ router.get('/dashboard', async (req, res) => {
     const sb = req.sb;
     const studentId = req.user.id;
 
-    // Doctor on duty = dispensary_staff row where staff_type='doctor' and is_on_duty=true
+    // Doctor on duty = dispensary_staff row where staff_type='medical_officer' and is_on_duty=true
     const { data: doctorRows } = await sb
       .from('dispensary_staff')
       .select('id, designation, specialization, current_queue_number, average_consultation_time, total_consultations')
-      .eq('staff_type', 'doctor')
+      .eq('staff_type', 'medical_officer')
       .eq('is_on_duty', true)
       .limit(1);
     const doctorRow = doctorRows?.[0];
@@ -114,7 +114,7 @@ router.post(
         .from('dispensary_staff')
         .select('id, current_queue_number')
         .eq('id', doctorId)
-        .eq('staff_type', 'doctor')
+        .eq('staff_type', 'medical_officer')
         .maybeSingle();
       if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
@@ -429,7 +429,7 @@ router.get('/available-slots/:doctorId', async (req, res) => {
       .from('dispensary_staff')
       .select('id')
       .eq('id', doctorId)
-      .eq('staff_type', 'doctor')
+      .eq('staff_type', 'medical_officer')
       .maybeSingle();
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 

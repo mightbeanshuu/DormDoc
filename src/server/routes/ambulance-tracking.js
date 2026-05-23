@@ -1,44 +1,99 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
-const AmbulanceTrip = require('../models/AmbulanceTrip');
-const Ambulance = require('../models/Ambulance');
-const User = require('../models/User');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Apply authentication to all routes
-router.use(authenticateToken);
+router.use(authenticateToken, requireRole(['admin']));
 
-// @route   GET /api/admin/ambulance-trips
-// @desc    Get all ambulance trips
-// @access  Private (Admin only)
+const ACTIVE_STATUSES = ['pending', 'dispatched', 'en_route', 'arrived'];
+const NORMALIZE_STATUS = (s) => (s === 'en-route' ? 'en_route' : s); // legacy compat
+
+function emitIo(req, event, payload) {
+  if (req.io) req.io.emit(event, payload);
+}
+
+async function hydrate(sb, trips) {
+  const rows = trips || [];
+  if (!rows.length) return [];
+  const ambulanceIds = [...new Set(rows.map((t) => t.ambulance_id).filter(Boolean))];
+  const studentIds = [...new Set(rows.map((t) => t.student_id).filter(Boolean))];
+
+  const [{ data: ambulances }, { data: profiles }, { data: students }] = await Promise.all([
+    ambulanceIds.length
+      ? sb.from('ambulances').select('id, vehicle_number, driver_name, driver_phone').in('id', ambulanceIds)
+      : Promise.resolve({ data: [] }),
+    studentIds.length
+      ? sb.from('profiles').select('id, name, email').in('id', studentIds)
+      : Promise.resolve({ data: [] }),
+    studentIds.length
+      ? sb.from('students').select('id, student_id').in('id', studentIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const ambulanceMap = Object.fromEntries((ambulances || []).map((a) => [a.id, a]));
+  const profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+  const studentMap = Object.fromEntries((students || []).map((s) => [s.id, s]));
+
+  return rows.map((t) => ({
+    _id: t.id,
+    patientName: t.patient_name,
+    patientPhone: t.patient_phone,
+    pickupLocation: t.pickup_location,
+    destination: t.destination,
+    emergencyType: t.emergency_type,
+    priority: t.priority,
+    status: t.status,
+    currentLocation: {
+      latitude: t.current_latitude,
+      longitude: t.current_longitude,
+      address: t.current_address,
+    },
+    estimatedTime: t.estimated_time,
+    duration: t.actual_duration,
+    notes: t.notes,
+    completionNotes: t.completion_notes,
+    completedAt: t.completed_at,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+    ambulance: ambulanceMap[t.ambulance_id]
+      ? {
+          _id: t.ambulance_id,
+          vehicleNumber: ambulanceMap[t.ambulance_id].vehicle_number,
+          driverName: ambulanceMap[t.ambulance_id].driver_name,
+          driverPhone: ambulanceMap[t.ambulance_id].driver_phone,
+        }
+      : null,
+    student: t.student_id
+      ? {
+          _id: t.student_id,
+          name: profileMap[t.student_id]?.name || null,
+          email: profileMap[t.student_id]?.email || null,
+          studentId: studentMap[t.student_id]?.student_id || null,
+        }
+      : null,
+  }));
+}
+
+// ─── routes ─────────────────────────────────────────────────────────────────
+
 router.get('/admin/ambulance-trips', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const trips = await AmbulanceTrip.find()
-      .populate('ambulance', 'vehicleNumber driverName driverPhone')
-      .populate('student', 'name email studentId')
-      .sort({ createdAt: -1 });
-
-    res.json(trips);
+    const sb = req.sb;
+    const { data: trips, error } = await sb
+      .from('ambulance_trips')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(await hydrate(sb, trips));
   } catch (error) {
     console.error('Get ambulance trips error:', error);
     res.status(500).json({ message: 'Server error fetching ambulance trips' });
   }
 });
 
-// @route   POST /api/admin/ambulance-trips
-// @desc    Create new ambulance trip
-// @access  Private (Admin only)
 router.post('/admin/ambulance-trips', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
+    const sb = req.sb;
     const {
       patientName,
       patientPhone,
@@ -49,165 +104,250 @@ router.post('/admin/ambulance-trips', async (req, res) => {
       ambulanceId,
       driverId,
       estimatedTime,
-      notes
+      notes,
+      studentId,
     } = req.body;
 
     if (!patientName || !pickupLocation || !destination || !ambulanceId) {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
-    const ambulance = await Ambulance.findById(ambulanceId);
-    if (!ambulance) {
-      return res.status(404).json({ message: 'Ambulance not found' });
-    }
+    const { data: ambulance } = await sb.from('ambulances').select('id').eq('id', ambulanceId).maybeSingle();
+    if (!ambulance) return res.status(404).json({ message: 'Ambulance not found' });
 
-    const trip = new AmbulanceTrip({
-      patientName,
-      patientPhone,
-      pickupLocation,
-      destination,
-      emergencyType,
-      priority,
-      ambulance: ambulanceId,
-      driver: driverId,
-      estimatedTime: estimatedTime ? parseInt(estimatedTime) : null,
-      notes,
+    const { data: trip, error: insErr } = await sb
+      .from('ambulance_trips')
+      .insert({
+        patient_name: patientName,
+        patient_phone: patientPhone || '',
+        student_id: studentId || null,
+        pickup_location: pickupLocation,
+        destination,
+        emergency_type: emergencyType || 'medical',
+        priority: priority || 'medium',
+        ambulance_id: ambulanceId,
+        driver_id: driverId || null,
+        estimated_time: estimatedTime ? parseInt(estimatedTime, 10) : null,
+        notes: notes || '',
+        status: 'pending',
+        created_by: req.user.id,
+      })
+      .select()
+      .single();
+    if (insErr) throw insErr;
+
+    await sb.from('ambulance_trip_status_log').insert({
+      trip_id: trip.id,
       status: 'pending',
-      createdBy: req.user.id
+      updated_by: req.user.id,
     });
 
-    await trip.save();
-    await trip.populate('ambulance', 'vehicleNumber driverName driverPhone');
-    await trip.populate('student', 'name email studentId');
-
-    res.json(trip);
+    const [hydrated] = await hydrate(sb, [trip]);
+    res.json(hydrated);
   } catch (error) {
     console.error('Create ambulance trip error:', error);
     res.status(500).json({ message: 'Server error creating ambulance trip' });
   }
 });
 
-// @route   PUT /api/admin/ambulance-trips/:id/status
-// @desc    Update trip status
-// @access  Private (Admin only)
 router.put('/admin/ambulance-trips/:id/status', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    const sb = req.sb;
+    const status = NORMALIZE_STATUS(req.body.status);
+    const { location } = req.body;
+    const { id } = req.params;
+
+    if (!['pending', 'dispatched', 'en_route', 'arrived', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
     }
 
-    const { status, location, timestamp } = req.body;
-    const trip = await AmbulanceTrip.findById(req.params.id);
+    const { data: trip } = await sb.from('ambulance_trips').select('id').eq('id', id).maybeSingle();
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
 
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
+    const updates = { status };
+    if (location?.latitude != null) updates.current_latitude = location.latitude;
+    if (location?.longitude != null) updates.current_longitude = location.longitude;
+    if (location?.address) updates.current_address = location.address;
 
-    trip.status = status;
-    if (location) {
-      trip.currentLocation = location;
-    }
-    if (timestamp) {
-      trip.lastUpdated = new Date(timestamp);
-    } else {
-      trip.lastUpdated = new Date();
-    }
+    const { data: updated, error: updErr } = await sb
+      .from('ambulance_trips')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (updErr) throw updErr;
 
-    // Add status history
-    trip.statusHistory.push({
+    await sb.from('ambulance_trip_status_log').insert({
+      trip_id: id,
       status,
-      timestamp: trip.lastUpdated,
-      updatedBy: req.user.id
+      latitude: location?.latitude || null,
+      longitude: location?.longitude || null,
+      address: location?.address || null,
+      updated_by: req.user.id,
     });
 
-    await trip.save();
-    res.json(trip);
+    emitIo(req, 'ambulance-trip-status-updated', {
+      tripId: id,
+      status,
+      location: location || null,
+      timestamp: new Date(),
+    });
+
+    const [hydrated] = await hydrate(sb, [updated]);
+    res.json(hydrated);
   } catch (error) {
     console.error('Update trip status error:', error);
     res.status(500).json({ message: 'Server error updating trip status' });
   }
 });
 
-// @route   PUT /api/admin/ambulance-trips/:id/complete
-// @desc    Complete trip
-// @access  Private (Admin only)
 router.put('/admin/ambulance-trips/:id/complete', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
+    const sb = req.sb;
+    const { id } = req.params;
+    const { completionNotes = '', completedAt } = req.body;
 
-    const { completionNotes, completedAt } = req.body;
-    const trip = await AmbulanceTrip.findById(req.params.id);
+    const { data: trip } = await sb.from('ambulance_trips').select('*').eq('id', id).maybeSingle();
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
 
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
+    const completedTs = completedAt ? new Date(completedAt) : new Date();
+    const durationMin = trip.created_at
+      ? Math.round((completedTs - new Date(trip.created_at)) / (1000 * 60))
+      : null;
 
-    trip.status = 'completed';
-    trip.completionNotes = completionNotes;
-    trip.completedAt = completedAt ? new Date(completedAt) : new Date();
-    trip.lastUpdated = new Date();
+    const { data: updated, error: updErr } = await sb
+      .from('ambulance_trips')
+      .update({
+        status: 'completed',
+        completion_notes: completionNotes,
+        completed_at: completedTs.toISOString(),
+        actual_duration: durationMin,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (updErr) throw updErr;
 
-    // Calculate duration
-    if (trip.createdAt) {
-      trip.duration = Math.round((trip.completedAt - trip.createdAt) / (1000 * 60)); // in minutes
-    }
-
-    // Add status history
-    trip.statusHistory.push({
+    await sb.from('ambulance_trip_status_log').insert({
+      trip_id: id,
       status: 'completed',
-      timestamp: trip.completedAt,
-      updatedBy: req.user.id
+      updated_by: req.user.id,
     });
 
-    await trip.save();
-    res.json(trip);
+    emitIo(req, 'ambulance-trip-completed', { tripId: id, timestamp: completedTs });
+
+    const [hydrated] = await hydrate(sb, [updated]);
+    res.json(hydrated);
   } catch (error) {
     console.error('Complete trip error:', error);
     res.status(500).json({ message: 'Server error completing trip' });
   }
 });
 
-// @route   GET /api/admin/ambulance-trips/:id
-// @desc    Get trip by ID
-// @access  Private (Admin only)
+router.get('/admin/ambulance-trips/active', async (req, res) => {
+  try {
+    const sb = req.sb;
+    const { data: trips } = await sb
+      .from('ambulance_trips')
+      .select('*')
+      .in('status', ACTIVE_STATUSES)
+      .order('created_at', { ascending: false });
+    res.json(await hydrate(sb, trips));
+  } catch (error) {
+    console.error('Get active trips error:', error);
+    res.status(500).json({ message: 'Server error fetching active trips' });
+  }
+});
+
+router.get('/admin/ambulance-trips/completed', async (req, res) => {
+  try {
+    const sb = req.sb;
+    const { data: trips } = await sb
+      .from('ambulance_trips')
+      .select('*')
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false });
+    res.json(await hydrate(sb, trips));
+  } catch (error) {
+    console.error('Get completed trips error:', error);
+    res.status(500).json({ message: 'Server error fetching completed trips' });
+  }
+});
+
+router.get('/admin/ambulance-trips/statistics', async (req, res) => {
+  try {
+    const sb = req.sb;
+    const { period = '30d' } = req.query;
+    const days = parseInt(String(period).replace('d', ''), 10) || 30;
+    const startIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const [
+      { count: totalTrips },
+      { count: completedTrips },
+      { count: activeTrips },
+      { data: completedRows },
+      { count: highPriorityTrips },
+    ] = await Promise.all([
+      sb.from('ambulance_trips').select('id', { count: 'exact', head: true }).gte('created_at', startIso),
+      sb
+        .from('ambulance_trips')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('created_at', startIso),
+      sb.from('ambulance_trips').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES),
+      sb
+        .from('ambulance_trips')
+        .select('actual_duration')
+        .eq('status', 'completed')
+        .gte('created_at', startIso)
+        .not('actual_duration', 'is', null),
+      sb
+        .from('ambulance_trips')
+        .select('id', { count: 'exact', head: true })
+        .eq('priority', 'high')
+        .gte('created_at', startIso),
+    ]);
+
+    const durations = (completedRows || []).map((r) => r.actual_duration);
+    const averageDuration = durations.length ? durations.reduce((s, d) => s + d, 0) / durations.length : 0;
+
+    res.json({
+      totalTrips: totalTrips || 0,
+      completedTrips: completedTrips || 0,
+      activeTrips: activeTrips || 0,
+      averageDuration,
+      highPriorityTrips: highPriorityTrips || 0,
+      completionRate: totalTrips > 0 ? (completedTrips / totalTrips) * 100 : 0,
+    });
+  } catch (error) {
+    console.error('Get trip statistics error:', error);
+    res.status(500).json({ message: 'Server error fetching trip statistics' });
+  }
+});
+
 router.get('/admin/ambulance-trips/:id', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const trip = await AmbulanceTrip.findById(req.params.id)
-      .populate('ambulance', 'vehicleNumber driverName driverPhone')
-      .populate('student', 'name email studentId');
-
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    res.json(trip);
+    const sb = req.sb;
+    const { data: trip } = await sb.from('ambulance_trips').select('*').eq('id', req.params.id).maybeSingle();
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
+    const [hydrated] = await hydrate(sb, [trip]);
+    res.json(hydrated);
   } catch (error) {
     console.error('Get trip error:', error);
     res.status(500).json({ message: 'Server error fetching trip' });
   }
 });
 
-// @route   DELETE /api/admin/ambulance-trips/:id
-// @desc    Delete trip
-// @access  Private (Admin only)
 router.delete('/admin/ambulance-trips/:id', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
+    const sb = req.sb;
+    const { data: trip } = await sb.from('ambulance_trips').select('id').eq('id', req.params.id).maybeSingle();
+    if (!trip) return res.status(404).json({ message: 'Trip not found' });
 
-    const trip = await AmbulanceTrip.findById(req.params.id);
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    await AmbulanceTrip.findByIdAndDelete(req.params.id);
+    // Status log rows are append-only at the policy layer; service-role can delete them.
+    await sb.from('ambulance_trip_status_log').delete().eq('trip_id', req.params.id);
+    const { error: delErr } = await sb.from('ambulance_trips').delete().eq('id', req.params.id);
+    if (delErr) throw delErr;
     res.json({ message: 'Trip deleted successfully' });
   } catch (error) {
     console.error('Delete trip error:', error);
@@ -215,159 +355,51 @@ router.delete('/admin/ambulance-trips/:id', async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/ambulances
-// @desc    Get all ambulances
-// @access  Private (Admin only)
 router.get('/admin/ambulances', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const ambulances = await Ambulance.find({ isActive: true }).sort({ vehicleNumber: 1 });
-    res.json(ambulances);
+    const sb = req.sb;
+    const { data: ambulances, error } = await sb
+      .from('ambulances')
+      .select('*')
+      .eq('is_active', true)
+      .order('vehicle_number', { ascending: true });
+    if (error) throw error;
+    res.json(ambulances || []);
   } catch (error) {
     console.error('Get ambulances error:', error);
     res.status(500).json({ message: 'Server error fetching ambulances' });
   }
 });
 
-// @route   GET /api/admin/drivers
-// @desc    Get all drivers
-// @access  Private (Admin only)
 router.get('/admin/drivers', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
+    const sb = req.sb;
+    // No separate drivers table — drivers are denormalized onto ambulances.
+    // Return distinct (driver_name, driver_phone, driver_license) tuples.
+    const { data: ambulances } = await sb
+      .from('ambulances')
+      .select('id, driver_name, driver_phone, driver_license, vehicle_number')
+      .eq('is_active', true)
+      .order('driver_name', { ascending: true });
 
-    const drivers = await User.find({ role: 'driver', isActive: true }).sort({ name: 1 });
+    const seen = new Set();
+    const drivers = [];
+    for (const a of ambulances || []) {
+      const key = `${a.driver_name}|${a.driver_phone}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      drivers.push({
+        _id: a.id, // fallback id; no separate table
+        name: a.driver_name,
+        phone: a.driver_phone,
+        license: a.driver_license,
+        vehicleNumber: a.vehicle_number,
+      });
+    }
     res.json(drivers);
   } catch (error) {
     console.error('Get drivers error:', error);
     res.status(500).json({ message: 'Server error fetching drivers' });
-  }
-});
-
-// @route   GET /api/admin/ambulance-trips/active
-// @desc    Get active trips
-// @access  Private (Admin only)
-router.get('/admin/ambulance-trips/active', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const activeTrips = await AmbulanceTrip.find({
-      status: { $in: ['pending', 'dispatched', 'en-route', 'arrived'] }
-    })
-      .populate('ambulance', 'vehicleNumber driverName driverPhone')
-      .populate('student', 'name email studentId')
-      .sort({ createdAt: -1 });
-
-    res.json(activeTrips);
-  } catch (error) {
-    console.error('Get active trips error:', error);
-    res.status(500).json({ message: 'Server error fetching active trips' });
-  }
-});
-
-// @route   GET /api/admin/ambulance-trips/completed
-// @desc    Get completed trips
-// @access  Private (Admin only)
-router.get('/admin/ambulance-trips/completed', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const completedTrips = await AmbulanceTrip.find({ status: 'completed' })
-      .populate('ambulance', 'vehicleNumber driverName driverPhone')
-      .populate('student', 'name email studentId')
-      .sort({ completedAt: -1 });
-
-    res.json(completedTrips);
-  } catch (error) {
-    console.error('Get completed trips error:', error);
-    res.status(500).json({ message: 'Server error fetching completed trips' });
-  }
-});
-
-// @route   GET /api/admin/ambulance-trips/statistics
-// @desc    Get trip statistics
-// @access  Private (Admin only)
-router.get('/admin/ambulance-trips/statistics', async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const { period = '30d' } = req.query;
-    const endDate = new Date();
-    const startDate = new Date();
-    
-    switch (period) {
-      case '7d':
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      case '90d':
-        startDate.setDate(startDate.getDate() - 90);
-        break;
-      default:
-        startDate.setDate(startDate.getDate() - 30);
-    }
-
-    const [
-      totalTrips,
-      completedTrips,
-      activeTrips,
-      averageDuration,
-      highPriorityTrips
-    ] = await Promise.all([
-      AmbulanceTrip.countDocuments({
-        createdAt: { $gte: startDate, $lte: endDate }
-      }),
-      AmbulanceTrip.countDocuments({
-        status: 'completed',
-        createdAt: { $gte: startDate, $lte: endDate }
-      }),
-      AmbulanceTrip.countDocuments({
-        status: { $in: ['pending', 'dispatched', 'en-route', 'arrived'] }
-      }),
-      AmbulanceTrip.aggregate([
-        {
-          $match: {
-            status: 'completed',
-            createdAt: { $gte: startDate, $lte: endDate }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            averageDuration: { $avg: '$duration' }
-          }
-        }
-      ]),
-      AmbulanceTrip.countDocuments({
-        priority: 'high',
-        createdAt: { $gte: startDate, $lte: endDate }
-      })
-    ]);
-
-    res.json({
-      totalTrips,
-      completedTrips,
-      activeTrips,
-      averageDuration: averageDuration[0]?.averageDuration || 0,
-      highPriorityTrips,
-      completionRate: totalTrips > 0 ? (completedTrips / totalTrips) * 100 : 0
-    });
-  } catch (error) {
-    console.error('Get trip statistics error:', error);
-    res.status(500).json({ message: 'Server error fetching trip statistics' });
   }
 });
 

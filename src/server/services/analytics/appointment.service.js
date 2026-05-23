@@ -1,82 +1,60 @@
-const Appointment = require('../../models/Appointment');
 const cache = require('./snapshotCache');
 
 const CACHE_KEY = 'analytics:appointments';
 
-async function compute() {
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+async function compute(req) {
+  const sb = req.sb;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [result] = await Appointment.aggregate([
-    {
-      $facet: {
-        // Appointments per day (last 30 days)
-        perDay: [
-          { $match: { appointmentDate: { $gte: thirtyDaysAgo } } },
-          {
-            $group: {
-              _id: { $dateToString: { format: '%Y-%m-%d', date: '$appointmentDate' } },
-              count: { $sum: 1 },
-            },
-          },
-          { $sort: { _id: 1 } },
-          { $project: { date: '$_id', count: 1, _id: 0 } },
-        ],
-
-        // Per-doctor workload (counts)
-        perDoctor: [
-          {
-            $group: {
-              _id: '$doctor',
-              count: { $sum: 1 },
-            },
-          },
-          {
-            $lookup: {
-              from: 'doctors',
-              localField: '_id',
-              foreignField: '_id',
-              as: 'doctorInfo',
-            },
-          },
-          { $unwind: { path: '$doctorInfo', preserveNullAndEmptyArrays: true } },
-          {
-            $project: {
-              _id: 0,
-              doctorId: '$_id',
-              doctorName: { $ifNull: ['$doctorInfo.name', 'Unknown'] },
-              count: 1,
-            },
-          },
-          { $sort: { count: -1 } },
-        ],
-
-        // Peak hour-of-day distribution
-        // appointmentTime is a String "HH:MM"; extract hour via $substr
-        peakHour: [
-          {
-            $addFields: {
-              hourStr: { $substr: ['$appointmentTime', 0, 2] },
-            },
-          },
-          {
-            $group: {
-              _id: { $toInt: '$hourStr' },
-              count: { $sum: 1 },
-            },
-          },
-          { $sort: { _id: 1 } },
-          { $project: { hour: '$_id', count: 1, _id: 0 } },
-        ],
-      },
-    },
+  const [{ data: rows30 }, { data: allRows }] = await Promise.all([
+    sb.from('appointments').select('appointment_date, doctor_id, appointment_time').gte('appointment_date', thirtyDaysAgo),
+    sb.from('appointments').select('doctor_id, appointment_time'),
   ]);
 
-  return {
-    perDay: result.perDay,
-    perDoctor: result.perDoctor,
-    peakHour: result.peakHour,
-  };
+  // Appointments per day (last 30 days)
+  const dayMap = new Map();
+  for (const r of rows30 || []) {
+    const day = r.appointment_date; // already YYYY-MM-DD
+    if (!day) continue;
+    dayMap.set(day, (dayMap.get(day) || 0) + 1);
+  }
+  const perDay = [...dayMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, count]) => ({ date, count }));
+
+  // Per-doctor workload (all-time)
+  const doctorMap = new Map();
+  for (const r of allRows || []) {
+    if (!r.doctor_id) continue;
+    doctorMap.set(r.doctor_id, (doctorMap.get(r.doctor_id) || 0) + 1);
+  }
+  const doctorIds = [...doctorMap.keys()];
+  let doctorNameMap = {};
+  if (doctorIds.length) {
+    const { data: profiles } = await sb.from('profiles').select('id, name').in('id', doctorIds);
+    doctorNameMap = Object.fromEntries((profiles || []).map((p) => [p.id, p.name]));
+  }
+  const perDoctor = [...doctorMap.entries()]
+    .map(([doctorId, count]) => ({
+      doctorId,
+      doctorName: doctorNameMap[doctorId] || 'Unknown',
+      count,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // Peak hour-of-day
+  const hourMap = new Map();
+  for (const r of allRows || []) {
+    if (!r.appointment_time) continue;
+    const hour = parseInt(String(r.appointment_time).slice(0, 2), 10);
+    if (Number.isNaN(hour)) continue;
+    hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+  }
+  const peakHour = [...hourMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([hour, count]) => ({ hour, count }));
+
+  return { perDay, perDoctor, peakHour };
 }
 
 function getAppointmentAnalytics(req) {
