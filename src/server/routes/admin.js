@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const LoginLog = require('../models/LoginLog');
-const OTP = require('../models/OTP');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -290,15 +289,12 @@ router.post('/toggle-user-status', async (req, res) => {
   }
 });
 
-// Get OTP statistics
-router.get('/otp-statistics', async (req, res) => {
-  try {
-    const statistics = await OTP.getOTPStatistics();
-    res.json(statistics);
-  } catch (error) {
-    console.error('Get OTP statistics error:', error);
-    res.status(500).json({ message: 'Failed to fetch OTP statistics' });
-  }
+// OTP statistics endpoint removed in Phase 2 — OTP is now handled by Supabase
+// Auth (no longer queryable from our DB). Track via Supabase dashboard logs.
+router.get('/otp-statistics', (req, res) => {
+  res.status(410).json({
+    message: 'OTP statistics moved — see Supabase Auth logs.',
+  });
 });
 
 // Get all users with login information
