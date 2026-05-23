@@ -254,9 +254,11 @@ router.get('/leave-status', async (req, res) => {
   }
 });
 
+// leave_requests.decided_by FKs into faculty(id), so only HOD/faculty rows
+// can decide leaves at the DB level. Gate the route to match.
 router.put(
   '/approve-leave',
-  requireRole(['admin', 'hod']),
+  requireRole(['hod']),
   [
     body('appointmentId').isUUID().withMessage('Valid appointment ID is required'),
     body('action').isIn(['approve', 'reject']).withMessage('Action must be approve or reject'),
