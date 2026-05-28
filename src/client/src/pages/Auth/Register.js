@@ -17,6 +17,7 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import { useAuth } from '../../contexts/AuthContext';
 import AuthShell from './AuthShell';
 import { palette } from '../../theme';
+import { isBitEmail, BIT_DOMAIN, normalizeEmail } from '../../utils/emailDomain';
 
 // With Supabase email OTP, signup and login share one flow — the OTP request
 // creates the auth.users row on first use. The post-OTP onboarding form
@@ -34,8 +35,15 @@ const Register = () => {
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setError('');
+    const normalized = normalizeEmail(email);
+    if (!isBitEmail(normalized)) {
+      setError(
+        `Registration is open only to @${BIT_DOMAIN} addresses. If you're a parent, ask the dispensary to enrol you — parents don't self-register.`,
+      );
+      return;
+    }
     setLoading(true);
-    const result = await signInWithOtp(email.trim().toLowerCase());
+    const result = await signInWithOtp(normalized);
     setLoading(false);
     if (result.success) setStage('otp');
     else setError(result.message);

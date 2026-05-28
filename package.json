@@ -10,6 +10,8 @@
     "server": "nodemon src/server/server.js",
     "client": "cd src/client && npm start",
     "seed": "node scripts/seed.js",
+    "seed:panels": "node scripts/seed-panels.js",
+    "verify:panels": "node scripts/verify-panels.js",
     "install-client": "cd src/client && npm install",
     "heroku-postbuild": "npm run install-client && npm run build",
     "prepare": "husky"

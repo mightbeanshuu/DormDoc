@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { supabaseAdmin } = require('../db/supabase');
+const { assertEmailMatchesRole } = require('../utils/emailDomain');
 
 const ROLE_TABLES = {
   student: 'students',
@@ -28,6 +29,15 @@ router.post('/', authenticateToken, async (req, res) => {
   }
   const table = ROLE_TABLES[role];
   if (!table) return res.status(400).json({ message: `unsupported role: ${role}` });
+
+  try {
+    assertEmailMatchesRole(req.user.email, role);
+  } catch (err) {
+    if (err.code === 'EMAIL_DOMAIN_MISMATCH') {
+      return res.status(403).json({ message: err.message });
+    }
+    throw err;
+  }
 
   const row = { id: req.user.id, ...data };
 
