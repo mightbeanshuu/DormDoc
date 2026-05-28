@@ -1,5 +1,14 @@
 const jwt = require('jsonwebtoken');
+const { createRemoteJWKSet, jwtVerify } = require('jose');
 const { supabaseAdmin, supabaseForUser } = require('../db/supabase');
+
+// Newer Supabase projects sign access tokens with asymmetric keys (ES256/RS256)
+// fetched from /auth/v1/.well-known/jwks.json, not the legacy HS256 secret.
+// We try JWKS first and fall back to HS256 for projects still on the old key.
+const JWKS_URL = process.env.SUPABASE_URL
+  ? new URL('/auth/v1/.well-known/jwks.json', process.env.SUPABASE_URL)
+  : null;
+const jwks = JWKS_URL ? createRemoteJWKSet(JWKS_URL) : null;
 
 const DEV_STUDENT_UUID = '00000000-0000-0000-0000-000000000001';
 const DEV_HOD_UUID = '00000000-0000-0000-0000-000000000002';
@@ -101,7 +110,21 @@ async function loadUserFromProfile(userId) {
   };
 }
 
-function verifySupabaseJwt(token) {
+async function verifySupabaseJwt(token) {
+  // Asymmetric (ES256/RS256) — new Supabase default.
+  if (jwks) {
+    try {
+      const { payload } = await jwtVerify(token, jwks, {
+        algorithms: ['ES256', 'RS256'],
+      });
+      return payload;
+    } catch (err) {
+      // Fall through to HS256 only if the failure looks like wrong-alg.
+      if (err?.code !== 'ERR_JWS_INVALID' && err?.code !== 'ERR_JWKS_NO_MATCHING_KEY') {
+        throw err;
+      }
+    }
+  }
   const secret = process.env.SUPABASE_JWT_SECRET;
   if (!secret) throw new Error('SUPABASE_JWT_SECRET not configured');
   return jwt.verify(token, secret, { algorithms: ['HS256'] });
@@ -138,7 +161,7 @@ const authenticateToken = async (req, res, next) => {
       return next();
     }
 
-    const decoded = verifySupabaseJwt(token);
+    const decoded = await verifySupabaseJwt(token);
     const user = await loadUserFromProfile(decoded.sub);
 
     if (!user) return res.status(401).json({ message: 'Profile not found' });
@@ -149,10 +172,10 @@ const authenticateToken = async (req, res, next) => {
     req.sb = supabaseForUser(token);
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
+    if (error.name === 'TokenExpiredError' || error.code === 'ERR_JWT_EXPIRED') {
       return res.status(401).json({ message: 'Token expired' });
     }
-    if (error.name === 'JsonWebTokenError') {
+    if (error.name === 'JsonWebTokenError' || (error.code || '').startsWith('ERR_JW')) {
       return res.status(403).json({ message: 'Invalid token' });
     }
     console.error('Auth middleware error:', error);
@@ -189,7 +212,7 @@ const optionalAuth = async (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (token) {
-      const decoded = verifySupabaseJwt(token);
+      const decoded = await verifySupabaseJwt(token);
       const user = await loadUserFromProfile(decoded.sub);
       if (user && !user.inactive) {
         req.user = user;
