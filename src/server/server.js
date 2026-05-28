@@ -33,7 +33,10 @@ app.use(helmet());
 // number of prod origins (Railway, custom domain, preview deploys) can all be
 // served by one deployment without code changes. A request with no Origin
 // header (curl, server-side fetch) is always allowed.
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000')
+// Dev defaults include the API's own port because create-react-app's proxy
+// rewrites the Origin header to the target host when forwarding /api/* from
+// :3000 to :5001 — without :5001 in the list every dev request 500s.
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000,http://localhost:5001')
   .split(',').map((o) => o.trim()).filter(Boolean);
 app.use(cors({
   origin: (origin, cb) => {
