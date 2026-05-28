@@ -192,12 +192,6 @@ const requireRole = (roles) => (req, res, next) => {
   next();
 };
 
-const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required' });
-  }
-  next();
-};
 
 const requireStudent = (req, res, next) => {
   if (req.user.role !== 'student') {
@@ -226,17 +220,13 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-const sensitiveOperationLimit = (req, res, next) => {
-  next();
-};
+
 
 module.exports = {
   authenticateToken,
   requireRole,
-  requireAdmin,
   requireStudent,
   optionalAuth,
-  sensitiveOperationLimit,
   verifySupabaseJwt,
   loadUserFromProfile,
 };
