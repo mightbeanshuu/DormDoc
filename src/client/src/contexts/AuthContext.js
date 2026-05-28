@@ -77,6 +77,78 @@ export const AuthProvider = ({ children }) => {
     return () => sub?.data?.subscription?.unsubscribe();
   }, [hydrateProfile]);
 
+  // Email + password sign-in. Supabase stores the bcrypt hash in
+  // auth.users.encrypted_password — there's no need for our own column.
+  const signInWithPassword = useCallback(async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      toast.success('Signed in!');
+      return { success: true, data };
+    } catch (error) {
+      const message = error?.message || 'Invalid email or password';
+      toast.error(message);
+      return { success: false, message };
+    }
+  }, []);
+
+  // Email + password sign-up. If the project requires email confirmation,
+  // the user has to click a link before they can sign in.
+  const signUpWithPassword = useCallback(async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+      });
+      if (error) throw error;
+      const needsConfirmation = !data.session;
+      if (needsConfirmation) {
+        toast.info('Check your inbox to confirm your email.');
+      } else {
+        toast.success('Account created!');
+      }
+      return { success: true, needsConfirmation, data };
+    } catch (error) {
+      const message = error?.message || 'Sign-up failed';
+      toast.error(message);
+      return { success: false, message };
+    }
+  }, []);
+
+  // Trigger a password-reset email with a magic link back to /reset-password.
+  const requestPasswordReset = useCallback(async (email) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      const message = error?.message || 'Could not send reset email';
+      toast.error(message);
+      return { success: false, message };
+    }
+  }, []);
+
+  // Set a new password — used on the /reset-password landing page after the
+  // user has clicked the email link (Supabase puts them in a recovery session).
+  const updatePassword = useCallback(async (password) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast.success('Password updated');
+      return { success: true };
+    } catch (error) {
+      const message = error?.message || 'Password update failed';
+      toast.error(message);
+      return { success: false, message };
+    }
+  }, []);
+
   // Send a 6-digit OTP to the email. `shouldCreateUser: true` makes the same
   // endpoint serve both signup and login — Supabase decides based on whether
   // the email already exists in auth.users.
@@ -183,6 +255,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     needsOnboarding,
     setNeedsOnboarding,
+    signInWithPassword,
+    signUpWithPassword,
+    requestPasswordReset,
+    updatePassword,
     signInWithOtp,
     verifyOtp,
     logout,

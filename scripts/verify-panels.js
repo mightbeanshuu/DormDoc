@@ -18,18 +18,14 @@ require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local'), over
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const API_BASE = process.env.API_BASE || 'http://localhost:5001';
+const DEMO_PASSWORD = process.env.SEED_PANEL_PASSWORD || 'DormDoc2026!';
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) {
-  console.error('Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or REACT_APP_SUPABASE_ANON_KEY');
+if (!SUPABASE_URL || !ANON_KEY) {
+  console.error('Missing SUPABASE_URL or REACT_APP_SUPABASE_ANON_KEY');
   process.exit(1);
 }
-
-const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
 
 const PANELS = [
   { role: 'student',          email: 'btech10001.23@bitmesra.ac.in' },
@@ -42,19 +38,15 @@ const PANELS = [
 ];
 
 async function signInAsRole(email) {
-  // anon client so verifyOtp goes through the same path as the browser.
+  // anon client so the request goes through the same auth path as the browser.
   const anon = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-    type: 'magiclink',
+  const { data, error } = await anon.auth.signInWithPassword({
     email,
+    password: DEMO_PASSWORD,
   });
-  if (linkErr) throw new Error(`generateLink: ${linkErr.message}`);
-  const token = linkData?.properties?.email_otp;
-  if (!token) throw new Error('no email_otp in generateLink response');
-  const { data, error } = await anon.auth.verifyOtp({ email, token, type: 'email' });
-  if (error) throw new Error(`verifyOtp: ${error.message}`);
+  if (error) throw new Error(`signInWithPassword: ${error.message}`);
   return data.session.access_token;
 }
 

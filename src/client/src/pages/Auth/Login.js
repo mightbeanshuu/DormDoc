@@ -11,9 +11,13 @@ import {
   Chip,
   Divider,
   InputAdornment,
+  IconButton,
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import { useAuth } from '../../contexts/AuthContext';
 import AuthShell from './AuthShell';
@@ -23,13 +27,32 @@ const ROLE_CHIPS = ['Student', 'Doctor', 'HOD', 'Parent', 'Admin'];
 
 const Login = () => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState('');
-  const [stage, setStage] = useState('email'); // 'email' | 'otp'
+  const [mode, setMode] = useState('password'); // 'password' | 'otp-email' | 'otp-code'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { signInWithOtp, verifyOtp, needsOnboarding } = useAuth();
+  const {
+    signInWithPassword,
+    signInWithOtp,
+    verifyOtp,
+    needsOnboarding,
+  } = useAuth();
   const navigate = useNavigate();
+
+  const goDashboard = () => navigate(needsOnboarding ? '/onboarding' : '/dashboard');
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const result = await signInWithPassword(email.trim().toLowerCase(), password);
+    setLoading(false);
+    if (result.success) goDashboard();
+    else setError(result.message);
+  };
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -37,7 +60,7 @@ const Login = () => {
     setLoading(true);
     const result = await signInWithOtp(email.trim().toLowerCase());
     setLoading(false);
-    if (result.success) setStage('otp');
+    if (result.success) setMode('otp-code');
     else setError(result.message);
   };
 
@@ -47,9 +70,35 @@ const Login = () => {
     setLoading(true);
     const result = await verifyOtp(email.trim().toLowerCase(), otp.trim());
     setLoading(false);
-    if (result.success) navigate(needsOnboarding ? '/onboarding' : '/dashboard');
+    if (result.success) goDashboard();
     else setError(result.message);
   };
+
+  const overline = {
+    password: 'Sign in',
+    'otp-email': 'One-time code',
+    'otp-code': 'Verify code',
+  }[mode];
+
+  const headline = {
+    password: 'Welcome back',
+    'otp-email': 'Email me a code',
+    'otp-code': 'Check your inbox',
+  }[mode];
+
+  const subline = {
+    password: 'Enter the password you set when you joined DormDoc.',
+    'otp-email': "We'll send a fresh 6-digit code instead of using your password.",
+    'otp-code': (
+      <>
+        Enter the 6-digit code we sent to{' '}
+        <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+          {email}
+        </Box>
+        .
+      </>
+    ),
+  }[mode];
 
   return (
     <AuthShell>
@@ -58,7 +107,7 @@ const Login = () => {
           variant="overline"
           sx={{ color: palette.maroon.main, letterSpacing: '0.22em' }}
         >
-          {stage === 'email' ? 'Sign in' : 'Verify code'}
+          {overline}
         </Typography>
         <Typography
           variant="h4"
@@ -68,20 +117,10 @@ const Login = () => {
             color: 'text.primary',
           }}
         >
-          {stage === 'email' ? 'Welcome back' : 'Check your inbox'}
+          {headline}
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {stage === 'email'
-            ? "We'll email you a 6-digit code — no password to remember."
-            : (
-              <>
-                Enter the 6-digit code we sent to{' '}
-                <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
-                  {email}
-                </Box>
-                .
-              </>
-            )}
+          {subline}
         </Typography>
       </Stack>
 
@@ -91,7 +130,115 @@ const Login = () => {
         </Alert>
       )}
 
-      {stage === 'email' && (
+      {mode === 'password' && (
+        <Box component="form" onSubmit={handlePasswordSubmit} noValidate>
+          <Stack spacing={2}>
+            <TextField
+              fullWidth
+              autoFocus
+              label="Institute email"
+              placeholder="you@bitmesra.ac.in"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailOutlinedIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockOutlinedIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                      size="small"
+                      aria-label={showPassword ? 'hide password' : 'show password'}
+                    >
+                      {showPassword ? (
+                        <VisibilityOffOutlinedIcon fontSize="small" />
+                      ) : (
+                        <VisibilityOutlinedIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Stack>
+
+          <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1 }}>
+            <Link
+              component={RouterLink}
+              to="/forgot-password"
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                textDecoration: 'none',
+                '&:hover': { color: palette.maroon.main },
+              }}
+            >
+              Forgot password?
+            </Link>
+          </Stack>
+
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            color="primary"
+            size="large"
+            disabled={loading || !email || !password}
+            endIcon={!loading && <ArrowForwardRoundedIcon />}
+            sx={{ mt: 2.5, py: 1.4, fontSize: '1rem' }}
+          >
+            {loading ? <CircularProgress size={22} color="inherit" /> : 'Sign in'}
+          </Button>
+
+          <Button
+            fullWidth
+            onClick={() => {
+              setMode('otp-email');
+              setError('');
+            }}
+            sx={{ mt: 1, color: 'text.secondary' }}
+          >
+            Sign in with a one-time code instead
+          </Button>
+
+          <Stack direction="row" sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>
+            {ROLE_CHIPS.map((role) => (
+              <Chip
+                key={role}
+                size="small"
+                label={role}
+                variant="outlined"
+                sx={{ borderColor: 'rgba(123,30,30,0.25)', color: palette.maroon.main }}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
+
+      {mode === 'otp-email' && (
         <Box component="form" onSubmit={handleSendOtp} noValidate>
           <TextField
             fullWidth
@@ -103,7 +250,6 @@ const Login = () => {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
-            helperText="Students & staff: use @bitmesra.ac.in. Parents: use your registered email."
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -124,22 +270,20 @@ const Login = () => {
           >
             {loading ? <CircularProgress size={22} color="inherit" /> : 'Send 6-digit code'}
           </Button>
-
-          <Stack direction="row" sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>
-            {ROLE_CHIPS.map((role) => (
-              <Chip
-                key={role}
-                size="small"
-                label={role}
-                variant="outlined"
-                sx={{ borderColor: 'rgba(123,30,30,0.25)', color: palette.maroon.main }}
-              />
-            ))}
-          </Stack>
+          <Button
+            fullWidth
+            onClick={() => {
+              setMode('password');
+              setError('');
+            }}
+            sx={{ mt: 1, color: 'text.secondary' }}
+          >
+            Use password instead
+          </Button>
         </Box>
       )}
 
-      {stage === 'otp' && (
+      {mode === 'otp-code' && (
         <Box component="form" onSubmit={handleVerifyOtp} noValidate>
           <TextField
             fullWidth
@@ -175,7 +319,7 @@ const Login = () => {
           <Button
             fullWidth
             onClick={() => {
-              setStage('email');
+              setMode('otp-email');
               setOtp('');
               setError('');
             }}

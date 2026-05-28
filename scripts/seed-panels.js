@@ -30,6 +30,10 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+// All seeded panels share this demo password so test sign-in is trivial.
+// Override via env when running against anything that isn't a dev project.
+const DEMO_PASSWORD = process.env.SEED_PANEL_PASSWORD || 'DormDoc2026!';
+
 const PANELS = [
   {
     role: 'student',
@@ -153,9 +157,19 @@ async function findUserByEmail(email) {
 
 async function ensureAuthUser(email, name) {
   const existing = await findUserByEmail(email);
-  if (existing) return { user: existing, created: false };
+  if (existing) {
+    // Already-seeded accounts may pre-date the password rollout — reset their
+    // password to the demo value so signInWithPassword works for every panel.
+    const { error } = await supabase.auth.admin.updateUserById(existing.id, {
+      password: DEMO_PASSWORD,
+      email_confirm: true,
+    });
+    if (error) throw error;
+    return { user: existing, created: false };
+  }
   const { data, error } = await supabase.auth.admin.createUser({
     email,
+    password: DEMO_PASSWORD,
     email_confirm: true,
     user_metadata: { name },
   });
@@ -247,12 +261,13 @@ async function generateMagicLink(email) {
   }
 
   console.log('\n=== Sign-in cheatsheet ===');
-  console.log('Open /login, paste the email, paste the 6-digit code.\n');
+  console.log(`Open /login. Password for every panel: ${DEMO_PASSWORD}`);
+  console.log('(Magic-link OTP also printed below in case you want the codeless path.)\n');
   for (const r of results) {
     console.log(`[${r.panel.role}]`);
-    console.log(`  email: ${r.panel.email}`);
-    console.log(`  code : ${r.link.email_otp}`);
-    console.log(`  link : ${r.link.action_link}`);
+    console.log(`  email   : ${r.panel.email}`);
+    console.log(`  password: ${DEMO_PASSWORD}`);
+    console.log(`  otp     : ${r.link.email_otp}`);
     console.log();
   }
 })().catch((err) => {
