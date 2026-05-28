@@ -134,8 +134,29 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Set a new password — used on the /reset-password landing page after the
-  // user has clicked the email link (Supabase puts them in a recovery session).
+  // Verify a 6-digit recovery code coming from the password-reset email.
+  // On success Supabase puts the user in a recovery session — we can call
+  // updatePassword right after to set the new password without ever logging
+  // the user in fully.
+  const verifyRecoveryOtp = useCallback(async (email, token) => {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'recovery',
+      });
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      const message = error?.message || 'Invalid or expired code';
+      toast.error(message);
+      return { success: false, message };
+    }
+  }, []);
+
+  // Set a new password — used after the recovery code has been verified, or
+  // on the /reset-password landing page after the magic link puts the user
+  // in a recovery session.
   const updatePassword = useCallback(async (password) => {
     try {
       const { error } = await supabase.auth.updateUser({ password });
@@ -258,6 +279,7 @@ export const AuthProvider = ({ children }) => {
     signInWithPassword,
     signUpWithPassword,
     requestPasswordReset,
+    verifyRecoveryOtp,
     updatePassword,
     signInWithOtp,
     verifyOtp,
