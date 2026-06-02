@@ -62,7 +62,9 @@ const LoginInfo = () => {
       const response = await axios.get('/api/admin/login-info');
       return response.data;
     },
-    select: (data) => data || [],
+    // The endpoint returns either a bare array or { loginInfo: [...] }; always
+    // hand the table a real array so `.filter()` never blows up the page.
+    select: (data) => (Array.isArray(data) ? data : data?.loginInfo || []),
   });
 
   // Fetch login statistics

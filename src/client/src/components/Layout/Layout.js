@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useViewAs, ROLES_ALLOWED_TO_SWITCH } from '../../contexts/ViewAsContext';
 import PanelSwitcher from '../PanelSwitcher';
 import { palette } from '../../theme';
 import CollegeHeader from './CollegeHeader';
@@ -61,8 +62,14 @@ const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const { user, logout } = useAuth();
+  const { viewAsRole } = useViewAs();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // When an admin/HOD is previewing another role, the whole shell (nav + portal
+  // label) follows the previewed role so it stays coherent with the dashboard.
+  const effectiveRole =
+    user && ROLES_ALLOWED_TO_SWITCH.has(user.role) && viewAsRole ? viewAsRole : user?.role;
 
   const handleDrawerToggle = () => setMobileOpen((open) => !open);
   const handleProfileMenuOpen = (event) => setAnchorEl(event.currentTarget);
@@ -80,7 +87,7 @@ const Layout = ({ children }) => {
   };
 
   const getMenuItems = () => {
-    if (user?.role === 'student') {
+    if (effectiveRole === 'student') {
       return [
         { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
         { text: 'Book Appointment', icon: <LocalHospital />, path: '/book-appointment' },
@@ -92,14 +99,14 @@ const Layout = ({ children }) => {
         { text: 'AI Chatbot', icon: <Chat />, path: '/chatbot' },
         { text: 'Profile', icon: <Person />, path: '/profile' },
       ];
-    } else if (user?.role === 'doctor') {
+    } else if (effectiveRole === 'doctor') {
       return [
         { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
         { text: "Today's Appointments", icon: <LocalHospital />, path: '/doctor-dashboard' },
         { text: 'Patient Chat', icon: <Chat />, path: '/patient-chat' },
         { text: 'Profile', icon: <Person />, path: '/profile' },
       ];
-    } else if (user?.role === 'hod') {
+    } else if (effectiveRole === 'hod') {
       return [
         { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
         { text: 'Leave Approvals', icon: <Assignment />, path: '/hod/leave-approvals' },
@@ -109,14 +116,14 @@ const Layout = ({ children }) => {
         { text: 'Reports', icon: <Assignment />, path: '/hod/reports' },
         { text: 'Profile', icon: <Person />, path: '/profile' },
       ];
-    } else if (user?.role === 'parent') {
+    } else if (effectiveRole === 'parent') {
       return [
         { text: 'Ward Overview', icon: <Dashboard />, path: '/dashboard' },
         { text: 'Medical Records', icon: <Medication />, path: '/prescriptions' },
         { text: 'AI Support', icon: <Chat />, path: '/chatbot' },
         { text: 'Profile', icon: <Person />, path: '/profile' },
       ];
-    } else if (user?.role === 'admin') {
+    } else if (effectiveRole === 'admin') {
       return [
         { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
         { text: 'Doctors', icon: <LocalHospital />, path: '/doctors' },
@@ -179,7 +186,7 @@ const Layout = ({ children }) => {
             mt: 0.3,
           }}
         >
-          {ROLE_LABEL[user?.role] || 'Portal'}
+          {ROLE_LABEL[effectiveRole] || 'Portal'}
         </Typography>
       </Box>
     </Box>
@@ -376,7 +383,7 @@ const Layout = ({ children }) => {
                     lineHeight: 1.1,
                   }}
                 >
-                  {ROLE_LABEL[user?.role] || 'Portal'}
+                  {ROLE_LABEL[effectiveRole] || 'Portal'}
                 </Typography>
               </Box>
 

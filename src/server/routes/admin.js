@@ -615,4 +615,230 @@ router.get('/export-login-data', async (req, res) => {
   }
 });
 
+// ─── Doctors ──────────────────────────────────────────────────────────────────
+// The admin "Doctor Management" panel treats medical officers (dispensary_staff
+// rows with staff_type = 'medical_officer') as doctors. We return them in the
+// shape the React page expects: { _id, name, email, phone, specialty, ... }.
+
+const DOCTOR_STAFF_FIELDS =
+  'id, staff_id, designation, specialization, qualification, experience, is_on_duty, license_number';
+
+const toClientDoctor = (staff, profile = {}) => ({
+  _id: staff.id,
+  id: staff.id,
+  name: profile.name || '',
+  email: profile.email || '',
+  phone: profile.phone || '',
+  specialty: staff.specialization || staff.designation || '',
+  qualification: Array.isArray(staff.qualification)
+    ? staff.qualification.join(', ')
+    : staff.qualification || '',
+  experience: staff.experience ?? 0,
+  availability: staff.is_on_duty ? 'available' : 'offline',
+  consultationFee: 0,
+  bio: staff.designation || '',
+  licenseNumber: staff.license_number || '',
+  staffId: staff.staff_id || '',
+});
+
+router.get('/doctors', async (req, res) => {
+  try {
+    const sb = supabaseAdmin;
+    const { data: staff, error } = await sb
+      .from('dispensary_staff')
+      .select(DOCTOR_STAFF_FIELDS)
+      .eq('staff_type', 'medical_officer');
+    if (error) throw error;
+
+    const ids = (staff || []).map((s) => s.id);
+    const { data: profiles } = ids.length
+      ? await sb.from('profiles').select('id, name, email, phone, is_active').in('id', ids)
+      : { data: [] };
+    const pMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+
+    const doctors = (staff || [])
+      .filter((s) => pMap[s.id]?.is_active !== false)
+      .map((s) => toClientDoctor(s, pMap[s.id] || {}));
+    res.json(doctors);
+  } catch (error) {
+    console.error('Admin list doctors error:', error);
+    res.status(500).json({ message: 'Failed to load doctors' });
+  }
+});
+
+router.post('/doctors', async (req, res) => {
+  try {
+    const sb = supabaseAdmin;
+    const { name, email, phone, specialty, qualification, experience } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ message: 'Name and email are required' });
+    }
+
+    let userId;
+    const { data: created, error: createErr } = await sb.auth.admin.createUser({
+      email,
+      password: `Doc@${Math.random().toString(36).slice(2, 10)}A1`,
+      email_confirm: true,
+      user_metadata: { name, role: 'doctor' },
+    });
+    if (createErr) {
+      // Email may already exist — reuse the existing auth user.
+      const { data: list } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const existing = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (!existing) return res.status(400).json({ message: createErr.message });
+      userId = existing.id;
+    } else {
+      userId = created.user.id;
+    }
+
+    await sb.from('profiles').upsert(
+      { id: userId, email, name, phone: phone || null, role: 'doctor', is_active: true },
+      { onConflict: 'id' },
+    );
+    const { error: staffErr } = await sb.from('dispensary_staff').upsert(
+      {
+        id: userId,
+        staff_id: `DOC/${Date.now().toString().slice(-6)}`,
+        staff_type: 'medical_officer',
+        designation: specialty || 'Medical Officer',
+        specialization: specialty || null,
+        qualification: qualification ? [qualification] : [],
+        experience: Number(experience) || 0,
+        is_on_duty: true,
+      },
+      { onConflict: 'id' },
+    );
+    if (staffErr) throw staffErr;
+
+    res.status(201).json({ message: 'Doctor added successfully', id: userId });
+  } catch (error) {
+    console.error('Admin create doctor error:', error);
+    res.status(500).json({ message: 'Failed to create doctor' });
+  }
+});
+
+router.put('/doctors/:id', async (req, res) => {
+  try {
+    const sb = supabaseAdmin;
+    const { id } = req.params;
+    const { name, email, phone, specialty, qualification, experience, availability } = req.body;
+
+    const profilePatch = {};
+    if (name !== undefined) profilePatch.name = name;
+    if (email !== undefined) profilePatch.email = email;
+    if (phone !== undefined) profilePatch.phone = phone;
+    if (Object.keys(profilePatch).length) {
+      await sb.from('profiles').update(profilePatch).eq('id', id);
+    }
+
+    const staffPatch = {};
+    if (specialty !== undefined) {
+      staffPatch.specialization = specialty;
+      staffPatch.designation = specialty;
+    }
+    if (qualification !== undefined) staffPatch.qualification = qualification ? [qualification] : [];
+    if (experience !== undefined) staffPatch.experience = Number(experience) || 0;
+    if (availability !== undefined) staffPatch.is_on_duty = availability === 'available';
+    if (Object.keys(staffPatch).length) {
+      const { error } = await sb.from('dispensary_staff').update(staffPatch).eq('id', id);
+      if (error) throw error;
+    }
+    res.json({ message: 'Doctor updated successfully' });
+  } catch (error) {
+    console.error('Admin update doctor error:', error);
+    res.status(500).json({ message: 'Failed to update doctor' });
+  }
+});
+
+router.delete('/doctors/:id', async (req, res) => {
+  try {
+    const sb = supabaseAdmin;
+    const { error } = await sb.from('profiles').update({ is_active: false }).eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'Doctor removed successfully' });
+  } catch (error) {
+    console.error('Admin delete doctor error:', error);
+    res.status(500).json({ message: 'Failed to delete doctor' });
+  }
+});
+
+// ─── Leave Requests ───────────────────────────────────────────────────────────
+// Campus-wide leave requests for the admin panel (HOD routes are scoped to a
+// single department; admins see everything).
+
+const LEAVE_STATUS_MAP = {
+  approve: 'approved',
+  approved: 'approved',
+  reject: 'rejected',
+  rejected: 'rejected',
+  pending: 'pending',
+};
+
+router.get('/leave-requests', async (req, res) => {
+  try {
+    const sb = supabaseAdmin;
+    const { data: leaves, error } = await sb
+      .from('leave_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    const studentIds = [...new Set((leaves || []).map((l) => l.student_id).filter(Boolean))];
+    const [{ data: students }, { data: profiles }] = await Promise.all([
+      studentIds.length
+        ? sb.from('students').select('id, student_id, department').in('id', studentIds)
+        : Promise.resolve({ data: [] }),
+      studentIds.length
+        ? sb.from('profiles').select('id, name, email').in('id', studentIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const sMap = Object.fromEntries((students || []).map((s) => [s.id, s]));
+    const pMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+
+    const out = (leaves || []).map((l) => ({
+      _id: l.id,
+      studentName: pMap[l.student_id]?.name || 'Unknown',
+      studentRollNo: sMap[l.student_id]?.student_id || '',
+      department: sMap[l.student_id]?.department || '',
+      reason: l.reason || '',
+      duration: l.duration_days != null ? `${l.duration_days} day(s)` : '',
+      durationDays: l.duration_days,
+      status: l.status,
+      adminNotes: l.decision_comments || '',
+      createdAt: l.created_at,
+      reviewedAt: l.decided_at,
+    }));
+    res.json(out);
+  } catch (error) {
+    console.error('Admin list leave-requests error:', error);
+    res.status(500).json({ message: 'Failed to load leave requests' });
+  }
+});
+
+router.put('/leave-requests/:id', async (req, res) => {
+  try {
+    const sb = supabaseAdmin;
+    const next = LEAVE_STATUS_MAP[(req.body.status || '').toLowerCase()];
+    if (!next) {
+      return res.status(400).json({ message: 'status must be approved, rejected, or pending' });
+    }
+    // leave_requests.decided_by is a FK into faculty(id); admins are not faculty,
+    // so we record the decision via decided_by_name + decision_role and leave the
+    // FK column null to avoid a constraint violation.
+    const patch = {
+      status: next,
+      decision_comments: req.body.adminNotes || null,
+      decision_role: 'admin',
+      decided_by_name: req.user?.name || 'Administrator',
+      decided_at: next === 'pending' ? null : new Date().toISOString(),
+    };
+    const { error } = await sb.from('leave_requests').update(patch).eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'Leave request updated successfully' });
+  } catch (error) {
+    console.error('Admin update leave-request error:', error);
+    res.status(500).json({ message: 'Failed to update leave request' });
+  }
+});
+
 module.exports = router;

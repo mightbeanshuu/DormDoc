@@ -21,6 +21,24 @@ const applyAccessToken = (token) => {
   }
 };
 
+// Forward the active "view as" preview role (set by the panel switcher and
+// persisted in localStorage) on every request. The server uses it to serve the
+// previewed role's data for admins/HODs; absent it, requests behave normally.
+axios.interceptors.request.use((config) => {
+  try {
+    const viewAs = window.localStorage.getItem('dormdoc.viewAsRole');
+    if (viewAs) {
+      config.headers = config.headers || {};
+      config.headers['X-View-As'] = viewAs;
+    } else if (config.headers && config.headers['X-View-As']) {
+      delete config.headers['X-View-As'];
+    }
+  } catch (_) {
+    /* localStorage unavailable — skip preview header */
+  }
+  return config;
+});
+
 export const AuthProvider = ({ children }) => {
   const { active: bypassActive, mockUser } = useDevBypass();
 
