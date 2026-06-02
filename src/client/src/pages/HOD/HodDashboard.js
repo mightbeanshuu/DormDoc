@@ -21,7 +21,6 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchDashboardStats } from '../../services/hodService';
 import { palette } from '../../theme';
-import PanelSwitcher from '../../components/PanelSwitcher';
 import {
   WelcomeBanner,
   StatTile,
@@ -82,9 +81,6 @@ const HodDashboard = () => {
 
   return (
     <Box sx={{ pb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-        <PanelSwitcher />
-      </Box>
       <WelcomeBanner
         overline={user?.department ? `Department · ${user.department}` : 'Department overview'}
         title="HOD"
