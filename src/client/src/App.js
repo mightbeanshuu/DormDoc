@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ToastContainer } from 'react-toastify';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { AuthProvider } from './contexts/AuthContext';
@@ -158,6 +159,7 @@ function App() {
               <ChatbotComponent />
               <ToastContainer />
               <DevBypassBanner />
+              <SpeedInsights />
             </Router>
           </RealtimeProvider>
           </ViewAsProvider>
