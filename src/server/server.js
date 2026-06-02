@@ -44,10 +44,23 @@ if (process.env.NODE_ENV !== 'production') {
     if (!allowedOrigins.includes(o)) allowedOrigins.push(o);
   }
 }
+// On Vercel the client and API are served from the same *.vercel.app origin
+// (production alias + per-deploy preview URLs), so any *.vercel.app origin is
+// same-origin with the API and always allowed — without this, every browser
+// PUT/POST/DELETE (which sends an Origin header) 500s with a CORS error.
+const isAllowedOrigin = (origin) => {
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    if (new URL(origin).hostname.endsWith('.vercel.app')) return true;
+  } catch (_) {
+    /* malformed origin — fall through to reject */
+  }
+  return false;
+};
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (isAllowedOrigin(origin)) return cb(null, true);
     return cb(new Error(`CORS: origin ${origin} not in CLIENT_URL allow-list`));
   },
   credentials: true,
