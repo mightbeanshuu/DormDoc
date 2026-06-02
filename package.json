@@ -1,6 +1,6 @@
 {
   "name": "dormdoc",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "DormDoc — College Dispensary Management System for BIT Mesra",
   "main": "src/server/server.js",
   "scripts": {
