@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useViewAs, ROLES_ALLOWED_TO_SWITCH } from '../../contexts/ViewAsContext';
 
 /**
  * RoleRoute — client-side route guard.
@@ -19,6 +20,12 @@ import { useAuth } from '../../contexts/AuthContext';
  */
 const RoleRoute = ({ roles, children }) => {
   const { user, loading } = useAuth();
+  const { viewAsRole } = useViewAs();
+
+  // Honor "view as" preview: an admin/HOD previewing another role is allowed
+  // into that role's routes (server-side requireRole is the real guard).
+  const effectiveRole =
+    user && ROLES_ALLOWED_TO_SWITCH.has(user.role) && viewAsRole ? viewAsRole : user?.role;
 
   if (loading) {
     return (
@@ -28,7 +35,7 @@ const RoleRoute = ({ roles, children }) => {
     );
   }
 
-  if (!user || !roles.includes(user.role)) {
+  if (!user || !roles.includes(effectiveRole)) {
     return <Navigate to="/dashboard" replace />;
   }
 

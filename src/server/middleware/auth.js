@@ -110,6 +110,33 @@ async function loadUserFromProfile(userId) {
   };
 }
 
+// "View as" preview: a high-privilege user (admin/HOD) can preview another
+// role's panel. The client sends the previewed role in the `X-View-As` header.
+// We swap req.user to a representative active user of that role so role-scoped
+// endpoints return real sample data, and force the service-role client so the
+// reads bypass RLS (the JWT still belongs to the real admin). Previews are
+// read-only — writes are rejected — so no data is mutated as another user.
+const PREVIEW_TARGETS = {
+  admin: new Set(['student', 'doctor', 'hod', 'parent']),
+  hod: new Set(['student', 'doctor', 'parent']),
+};
+
+function canPreviewAs(realRole, targetRole) {
+  return !!PREVIEW_TARGETS[realRole]?.has(targetRole);
+}
+
+async function loadRepresentativeUser(role) {
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('role', role)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (!profiles || !profiles.length) return null;
+  return loadUserFromProfile(profiles[0].id);
+}
+
 async function verifySupabaseJwt(token) {
   // Asymmetric (ES256/RS256) — new Supabase default.
   if (jwks) {
@@ -166,6 +193,25 @@ const authenticateToken = async (req, res, next) => {
 
     if (!user) return res.status(401).json({ message: 'Profile not found' });
     if (user.inactive) return res.status(401).json({ message: 'Account deactivated' });
+
+    // "View as" preview — impersonate a representative user of the previewed role.
+    const viewAs = (req.headers['x-view-as'] || '').toLowerCase();
+    if (viewAs && viewAs !== user.role && canPreviewAs(user.role, viewAs)) {
+      const rep = await loadRepresentativeUser(viewAs);
+      if (rep && !rep.inactive) {
+        if (req.method !== 'GET') {
+          return res.status(403).json({
+            message: 'Preview mode is read-only. Exit preview to make changes.',
+          });
+        }
+        req.realUser = user;
+        req.user = rep;
+        req.viewAs = viewAs;
+        req.accessToken = token;
+        req.sb = supabaseAdmin; // preview reads bypass RLS (JWT is the real admin's)
+        return next();
+      }
+    }
 
     req.user = user;
     req.accessToken = token;
