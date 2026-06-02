@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { ToastContainer } from 'react-toastify';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { SpeedInsights } from '@vercel/speed-insights/react';
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { AuthProvider } from './contexts/AuthContext';
@@ -160,6 +161,7 @@ function App() {
               <ToastContainer />
               <DevBypassBanner />
               <SpeedInsights />
+              <VercelAnalytics />
             </Router>
           </RealtimeProvider>
           </ViewAsProvider>
