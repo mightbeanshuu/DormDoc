@@ -1,5 +1,7 @@
 name: CI
 
+# Lint + build check that runs on every PR and push to main, posting a
+# status check (the "github-actions" bot). Deploys are handled by Vercel.
 on:
   push:
     branches: [ "main" ]
@@ -7,7 +9,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  lint-and-build:
+    name: Lint & build
     runs-on: ubuntu-latest
 
     strategy:
@@ -16,20 +19,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-        
+
     - name: Install root dependencies
       run: npm ci || npm install
-      
+
     - name: Install client dependencies
       working-directory: ./src/client
       run: npm ci || npm install
-      
+
+    - name: Lint client
+      working-directory: ./src/client
+      run: npm run lint
+
     - name: Build client
       working-directory: ./src/client
-      run: npm run build
+      run: CI=true npm run build
