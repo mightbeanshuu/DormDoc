@@ -9,6 +9,17 @@ router.use(authenticateToken);
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+/** Escape user-controlled strings before embedding them in HTML emails. */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const HOD_EMAILS = {
   'Computer Science': 'hod.cs@college.edu',
   Electronics: 'hod.electronics@college.edu',
@@ -160,30 +171,30 @@ router.post(
       await safeSendMail({
         from: process.env.EMAIL_USER,
         to: hodEmail,
-        subject: `Medical Leave Request - ${req.user.name} (${req.user.studentId || ''})`,
+        subject: `Medical Leave Request - ${escapeHtml(req.user.name)} (${escapeHtml(req.user.studentId || '')})`,
         html: `
           <h2>Medical Leave Request</h2>
           <p><strong>Student Details:</strong></p>
           <ul>
-            <li>Name: ${req.user.name}</li>
-            <li>Student ID: ${req.user.studentId || ''}</li>
-            <li>Department: ${department}</li>
-            <li>Year: ${year}</li>
+            <li>Name: ${escapeHtml(req.user.name)}</li>
+            <li>Student ID: ${escapeHtml(req.user.studentId || '')}</li>
+            <li>Department: ${escapeHtml(department)}</li>
+            <li>Year: ${escapeHtml(year)}</li>
           </ul>
 
           <p><strong>Medical Details:</strong></p>
           <ul>
-            <li>Appointment Date: ${appointment.appointment_date}</li>
-            <li>Doctor: ${doctorName}</li>
-            <li>Diagnosis: ${appointment.diagnosis || 'Not provided'}</li>
-            <li>Treatment: ${appointment.treatment || 'Not provided'}</li>
+            <li>Appointment Date: ${escapeHtml(appointment.appointment_date)}</li>
+            <li>Doctor: ${escapeHtml(doctorName)}</li>
+            <li>Diagnosis: ${escapeHtml(appointment.diagnosis || 'Not provided')}</li>
+            <li>Treatment: ${escapeHtml(appointment.treatment || 'Not provided')}</li>
           </ul>
 
           <p><strong>Leave Request:</strong></p>
           <ul>
-            <li>Duration: ${duration} days</li>
-            <li>Reason: ${reason}</li>
-            <li>Submitted At: ${inserted.created_at}</li>
+            <li>Duration: ${escapeHtml(duration)} days</li>
+            <li>Reason: ${escapeHtml(reason)}</li>
+            <li>Submitted At: ${escapeHtml(inserted.created_at)}</li>
           </ul>
 
           <p>Please review and approve/reject this leave request through the admin portal.</p>
@@ -319,13 +330,13 @@ router.put(
         subject: `Medical Leave Request ${action === 'approve' ? 'Approved' : 'Rejected'}`,
         html: `
           <h2>Medical Leave Request ${action === 'approve' ? 'Approved' : 'Rejected'}</h2>
-          <p>Dear ${studentCtx.name},</p>
+          <p>Dear ${escapeHtml(studentCtx.name)},</p>
 
-          <p>Your medical leave request has been <strong>${action}d</strong> by ${approver.name}.</p>
+          <p>Your medical leave request has been <strong>${action === 'approve' ? 'approved' : 'rejected'}</strong> by ${escapeHtml(approver.name)}.</p>
 
-          ${comments ? `<p><strong>Comments:</strong> ${comments}</p>` : ''}
+          ${comments ? `<p><strong>Comments:</strong> ${escapeHtml(comments)}</p>` : ''}
 
-          <p>Decided on: ${decidedAt}</p>
+          <p>Decided on: ${escapeHtml(decidedAt)}</p>
 
           <p>If you have any questions, please contact your department office.</p>
         `,
