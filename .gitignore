@@ -62,6 +62,7 @@ src/client/public/uploads/
 .Trashes
 ehthumbs.db
 Thumbs.db
+.claude
 
 # Optional npm cache directory
 .npm
