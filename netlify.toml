@@ -1,0 +1,7 @@
+# Netlify integration is deprecated — production deploys go to Vercel.
+# This config exists only to satisfy Netlify's GitHub status checks
+# until the integration is fully disconnected from the repository.
+
+[build]
+  command = "mkdir -p out && echo '<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"0;url=https://dormdoc.vercel.app\"></head><body>Moved to Vercel</body></html>' > out/index.html"
+  publish = "out"

@@ -77,3 +77,6 @@ Thumbs.db
 
 # Vercel CLI link state
 .vercel
+
+
+.claude
