@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+    # Same layering as the dev server: .env holds committed defaults,
+    # .env.local (gitignored) overrides with real secrets — see .env.example.
+    env_file:
+      - .env
+      - path: .env.local
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: "5001"
+      # Public origin the browser sees (nginx). Comma-append prod domains as needed.
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
+    restart: unless-stopped
+    networks: [dormdoc]
+    # No host port mapping on purpose — the API is reachable only via nginx.
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/client.Dockerfile
+      args:
+        # Interpolated by compose from the same root .env; baked into the bundle.
+        REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL}
+        REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks: [dormdoc]
+
+networks:
+  dormdoc:
