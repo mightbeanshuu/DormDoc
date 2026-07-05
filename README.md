@@ -307,6 +307,17 @@ The dev server boots:
 
 In `NODE_ENV=development` the server accepts three bypass tokens (`dev_token` for student, `hod_dev_token` for HOD, `admin_dev_token` for admin) that skip Supabase Auth. Backed by real seeded `auth.users` rows so policy-respecting queries still work — see `supabase/migrations/` and the memory notes for the seed SQL.
 
+### 🐳 Run with Docker
+
+A production-style two-container setup (nginx serving the client build + Express API) is available:
+
+```bash
+cp .env.example .env   # fill in the Supabase values
+docker compose up --build -d
+```
+
+Then open http://localhost:8080. See [docs/docker.md](docs/docker.md) for details (env layering, CORS, troubleshooting).
+
 ---
 
 ## 💡 Usage & API
