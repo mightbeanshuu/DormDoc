@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { createRemoteJWKSet, jwtVerify } = require('jose');
 const { supabaseAdmin, supabaseForUser } = require('../db/supabase');
+const { cacheGetJson, cacheSetJson, authUserKey } = require('../db/redis');
+
+const AUTH_CACHE_TTL = parseInt(process.env.AUTH_CACHE_TTL_SECONDS, 10) || 300;
 
 // Newer Supabase projects sign access tokens with asymmetric keys (ES256/RS256)
 // fetched from /auth/v1/.well-known/jwks.json, not the legacy HS256 secret.
@@ -76,6 +79,9 @@ const toCamel = (row) => {
 };
 
 async function loadUserFromProfile(userId) {
+  const cached = await cacheGetJson(authUserKey(userId));
+  if (cached) return cached;
+
   const { data: profile, error } = await supabaseAdmin
     .from('profiles')
     .select('id, role, name, email, phone, photo_url, is_active, last_login_at')
@@ -96,7 +102,7 @@ async function loadUserFromProfile(userId) {
     roleRow = data;
   }
 
-  return {
+  const user = {
     id: profile.id,
     _id: profile.id,
     email: profile.email,
@@ -108,6 +114,11 @@ async function loadUserFromProfile(userId) {
     lastLoginAt: profile.last_login_at,
     ...toCamel(roleRow || {}),
   };
+  // Only active users are cached: a missing profile must stay uncached so the
+  // signup trigger race resolves on the next request, and deactivation /
+  // reactivation must propagate instantly.
+  await cacheSetJson(authUserKey(userId), user, AUTH_CACHE_TTL);
+  return user;
 }
 
 // "View as" preview: a high-privilege user (admin/HOD) can preview another

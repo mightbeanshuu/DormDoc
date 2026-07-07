@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { supabaseAdmin } = require('../db/supabase');
+const { invalidateAuthUserCache } = require('../db/redis');
 
 // Phase 2: signup, login, OTP, password reset, and password change moved to
 // Supabase Auth (client-side via @supabase/supabase-js). The endpoints below
@@ -40,6 +41,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ message: 'Failed to update profile' });
+  await invalidateAuthUserCache(req.user.id);
   res.json({ message: 'Profile updated', user: data });
 });
 

@@ -6,6 +6,7 @@ A production-style setup with two containers:
 | :--- | :--- | :--- |
 | `web` | nginx 1.27 (alpine) | Serves the built React app, proxies `/api/*` to the API |
 | `api` | Node 22 (alpine) | Express API (`src/server/server.js`) |
+| `redis` | Redis 7 (alpine) | Auth-profile cache (optional — the API falls back to direct Supabase queries if it's down) |
 
 The database is your cloud Supabase project — no local database container is needed.
 This setup is independent of the Vercel deployment (`vercel.json` / `api/` are untouched).
@@ -62,6 +63,19 @@ curl http://localhost:8080/api/health
 - **Runtime** (API container): everything else — Supabase service keys, email/SMS/AI
   keys, `CLIENT_URL`, etc. Changing them only requires `docker compose up -d` again.
 
+## Redis cache
+
+The `redis` container caches the per-request auth profile lookups (5-minute TTL,
+tunable via `AUTH_CACHE_TTL_SECONDS`). It is strictly optional: `docker compose
+stop redis` degrades gracefully to direct Supabase queries. Details:
+
+- No host port is published — cached auth objects contain PII (email, phone,
+  emergency contacts), so Redis is reachable only on the internal network.
+- No persistence (`--save ""`), 64 MB memory cap with `allkeys-lru` eviction —
+  losing it on restart just means a cold cache.
+- Inspect the cache: `docker compose exec redis redis-cli --scan --pattern 'dormdoc:*'`
+- Flush it: `docker compose exec redis redis-cli flushall`
+
 ## Architecture notes
 
 - The API container publishes **no host port** — it is reachable only through the
@@ -80,3 +94,4 @@ curl http://localhost:8080/api/health
 | POST/PUT return 500 with a CORS message | `CLIENT_URL` doesn't include the origin you're browsing from |
 | 413 on file upload | Request over 10 MB (`client_max_body_size` in `docker/nginx.conf`) |
 | `api` never becomes healthy | `docker compose logs api` — usually missing Supabase env vars |
+| Stale name/role right after an admin edit | Cache invalidation covers server-side writes; direct DB edits are stale for up to `AUTH_CACHE_TTL_SECONDS` — flush with `docker compose exec redis redis-cli flushall` |

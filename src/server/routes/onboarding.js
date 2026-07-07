@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { supabaseAdmin } = require('../db/supabase');
 const { assertEmailMatchesRole } = require('../utils/emailDomain');
+const { invalidateAuthUserCache } = require('../db/redis');
 
 const ROLE_TABLES = {
   student: 'students',
@@ -51,6 +52,8 @@ router.post('/', authenticateToken, async (req, res) => {
     console.error('onboarding upsert failed:', error);
     return res.status(400).json({ message: error.message });
   }
+
+  await invalidateAuthUserCache(req.user.id);
 
   res.json({ message: 'Onboarding complete', row: upserted });
 });
