@@ -316,7 +316,7 @@ cp .env.example .env   # fill in the Supabase values
 docker compose up --build -d
 ```
 
-Then open http://localhost:8080. See [docs/docker.md](docs/docker.md) for details (env layering, CORS, troubleshooting).
+Then open http://localhost:8080. The stack also includes an optional Redis container that caches per-request auth profile lookups — the API works identically without it. See [docs/docker.md](docs/docker.md) for details (env layering, CORS, Redis, troubleshooting).
 
 ---
 

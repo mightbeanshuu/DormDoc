@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken: auth } = require('../middleware/auth');
 const { supabaseAdmin } = require('../db/supabase');
+const { invalidateAuthUserCache } = require('../db/redis');
 
 const ROLE_TABLES = {
   student: 'students',
@@ -93,6 +94,8 @@ router.put('/profile', auth, async (req, res) => {
       if (error) throw error;
     }
 
+    await invalidateAuthUserCache(req.user.id);
+
     // Re-read so the caller gets the post-write state.
     const { data: profile } = await sb.from('profiles').select('*').eq('id', req.user.id).single();
     let roleRow = null;
@@ -117,6 +120,8 @@ router.post('/upload-profile-picture', auth, async (req, res) => {
     const sb = req.sb;
     const { error } = await sb.from('profiles').update({ photo_url: profilePictureUrl }).eq('id', req.user.id);
     if (error) throw error;
+
+    await invalidateAuthUserCache(req.user.id);
 
     res.json({ message: 'Profile picture updated successfully', profilePicture: profilePictureUrl });
   } catch (error) {

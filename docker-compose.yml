@@ -14,9 +14,28 @@ services:
       PORT: "5001"
       # Public origin the browser sees (nginx). Comma-append prod domains as needed.
       CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        # service_started, not service_healthy: the API falls back gracefully
+        # to direct Supabase lookups and must never be gated on Redis.
+        condition: service_started
     restart: unless-stopped
     networks: [dormdoc]
     # No host port mapping on purpose — the API is reachable only via nginx.
+
+  redis:
+    image: redis:7-alpine
+    # Pure cache: no persistence (--save ""), bounded memory, LRU eviction.
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    restart: unless-stopped
+    networks: [dormdoc]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    # No host port: cached auth objects contain PII (email/phone/emergency contact).
 
   web:
     build:

@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { supabaseAdmin } = require('../db/supabase');
+const { invalidateAuthUserCache } = require('../db/redis');
 
 const router = express.Router();
 
@@ -465,6 +466,8 @@ router.post('/toggle-user-status', async (req, res) => {
     const { error: updateErr } = await sb.from('profiles').update({ is_active: isActive }).eq('id', userId);
     if (updateErr) throw updateErr;
 
+    await invalidateAuthUserCache(userId);
+
     await logAuditEvent(sb, {
       userId,
       email: profile.email,
@@ -710,6 +713,8 @@ router.post('/doctors', async (req, res) => {
     );
     if (staffErr) throw staffErr;
 
+    await invalidateAuthUserCache(userId);
+
     res.status(201).json({ message: 'Doctor added successfully', id: userId });
   } catch (error) {
     console.error('Admin create doctor error:', error);
@@ -743,6 +748,7 @@ router.put('/doctors/:id', async (req, res) => {
       const { error } = await sb.from('dispensary_staff').update(staffPatch).eq('id', id);
       if (error) throw error;
     }
+    await invalidateAuthUserCache(id);
     res.json({ message: 'Doctor updated successfully' });
   } catch (error) {
     console.error('Admin update doctor error:', error);
@@ -755,6 +761,7 @@ router.delete('/doctors/:id', async (req, res) => {
     const sb = supabaseAdmin;
     const { error } = await sb.from('profiles').update({ is_active: false }).eq('id', req.params.id);
     if (error) throw error;
+    await invalidateAuthUserCache(req.params.id);
     res.json({ message: 'Doctor removed successfully' });
   } catch (error) {
     console.error('Admin delete doctor error:', error);
