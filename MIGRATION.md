@@ -122,7 +122,7 @@ Decision log:
 
 ### Block 2.2: Replace OTP system → ✅ done
 - [x] Delete `src/server/models/OTP.js`
-- [x] Stash `src/server/utils/sms.js` for future SMS fallback (kept on disk, unimported)
+- [x] Remove `src/server/utils/sms.js` — dead code, was never imported after OTP moved to Supabase Auth
 - [x] Client: `signInWithOtp` / `verifyOtp` wired through new `AuthContext`
 - [x] Rewrite `Login.js`, `Register.js`, `ForgotPassword.js`, `Onboarding.js`
 
